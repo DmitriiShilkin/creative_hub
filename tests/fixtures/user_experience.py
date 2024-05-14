@@ -1,7 +1,6 @@
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from constants.month import Month
 from crud.user_experience import crud_user_experience
 from models import City, User, UserExperience
 from schemas.user.user_experience import ExperienceCreateDB
@@ -14,7 +13,7 @@ async def user_experience(
     schema = ExperienceCreateDB(
         company_name="Test company name",
         job_title="Test job title",
-        start_month=Month.February,
+        start_month=2,
         start_year=2024,
         still_working=True,
         city_id=city.id,

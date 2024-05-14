@@ -3,12 +3,8 @@ from typing import Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import User, City, UserExperience
-from constants.month import Month
-from schemas.user.user_experience import (
-    ExperienceCreate,
-    ExperienceUpdate,
-)
+from models import City, User, UserExperience
+from schemas.user.user_experience import ExperienceCreate, ExperienceUpdate
 
 ROOT_ENDPOINT = "/ch/v1/user-experience/"
 
@@ -24,7 +20,8 @@ class TestUserExperience:
         endpoint = f"{ROOT_ENDPOINT}{user.uid}/"
 
         response = await http_client.get(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
         )
         assert response.status_code == 200
 
@@ -45,14 +42,15 @@ class TestUserExperience:
         data = ExperienceCreate(
             company_name="Test company name",
             job_title="Test job title",
-            start_month=Month.February,
+            start_month=2,
             start_year=2024,
             still_working=True,
             city_id=city.id,
         )
 
         response = await http_client.post(
-            ROOT_ENDPOINT, headers=user_auth_headers,
+            ROOT_ENDPOINT,
+            headers=user_auth_headers,
             json=[data.model_dump()],
         )
         assert response.status_code == 201
@@ -60,16 +58,16 @@ class TestUserExperience:
         assert response_data[0]["job_title"] == data.job_title
 
     async def test_create_user_experience_with_invalid_city_id(
-            self,
-            http_client: AsyncSession,
-            get_auth_headers: Callable,
-            user: User,
+        self,
+        http_client: AsyncSession,
+        get_auth_headers: Callable,
+        user: User,
     ) -> None:
         user_auth_headers = await get_auth_headers(user)
         data = ExperienceCreate(
             company_name="Test company name",
             job_title="Test job title",
-            start_month=Month.February,
+            start_month=2,
             start_year=2024,
             city_id=999,
             still_working=True,
@@ -96,7 +94,8 @@ class TestUserExperience:
         )
 
         response = await http_client.patch(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
             json=data.model_dump(exclude_unset=True),
         )
         assert response.status_code == 200
@@ -116,7 +115,8 @@ class TestUserExperience:
         )
 
         response = await http_client.patch(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
             json=data.model_dump(exclude_unset=True),
         )
         assert response.status_code == 404
@@ -135,7 +135,8 @@ class TestUserExperience:
         )
 
         response = await http_client.patch(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
             json=data.model_dump(exclude_unset=True),
         )
         assert response.status_code == 404
@@ -154,7 +155,8 @@ class TestUserExperience:
         )
 
         response = await http_client.patch(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
             json=data.model_dump(),
         )
         assert response.status_code == 422
@@ -170,14 +172,16 @@ class TestUserExperience:
         endpoint = f"{ROOT_ENDPOINT}{user_experience.id}/"
 
         response = await http_client.delete(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
         )
         assert response.status_code == 204
 
         endpoint = f"{ROOT_ENDPOINT}{user.uid}/"
 
         response = await http_client.get(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
         )
         assert response.status_code == 200
         response_data = response.json()
@@ -193,7 +197,8 @@ class TestUserExperience:
         endpoint = f"{ROOT_ENDPOINT}{999}/"
 
         response = await http_client.delete(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
         )
         assert response.status_code == 404
 
@@ -208,6 +213,7 @@ class TestUserExperience:
         endpoint = f"{ROOT_ENDPOINT}{user_experience.id}/"
 
         response = await http_client.delete(
-            endpoint, headers=user_auth_headers,
+            endpoint,
+            headers=user_auth_headers,
         )
         assert response.status_code == 403
