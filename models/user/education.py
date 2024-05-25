@@ -22,9 +22,9 @@ class Education(Base):
         - type (EducationType): Тип образования
         - name (str): Название учебного заведения.
         - department (str): Название факультета или кафедры.
-        - start_month (Month): Месяц начала обучения
+        - start_month (int): Месяц начала обучения.
         - start_year (int): Год начала обучения.
-        - end_month (Month, optional): Месяц окончания обучения
+        - end_month (int, optional): Месяц окончания обучения, может быть None.
         - end_year (int, optional): Год окончания обучения, может быть None.
         - is_current (bool): Флаг текущего обучения.
         - certificates (list[EducationCertificateFile]): Список сертификатов
@@ -68,4 +68,4 @@ class Education(Base):
     user: Mapped["User"] = relationship("User", back_populates="education")
 
     def __str__(self) -> str:
-        return f"{self.id} - {self.user}- {self.name}"
+        return f"{self.id} - {self.name}"

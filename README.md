@@ -8,7 +8,8 @@
 1. Исправлен crud для удаления в endpoint Delete Proposal.
 2. Исправлены ненаходящиеся Job в endpoints Post/Update/Delete Contact Person Job.
 3. Проведен рефакторинг констант для UserExperience, Education, crud_types.
-4. BaseAsyncCRUD разделен на 4 миксина, проведена проверка работы всех endpoints.
+4. BaseAsyncCRUD разделен на 4 миксина, проведена проверка работы всех endpoints,
+в crud Job, User добавлена подгрузка связанных моделей.
 5. Найден и исправлен баг - у модели User атрибут birthday имел тип datetimetz,
 исправлен на date, написана и протестирована миграция.
 6. В моделях UserExperience и Education для атрибутов start_month, end_month 
@@ -21,6 +22,7 @@ social_networks, links, experience. Скорректирована схема Us
 вызывамых исключений, исправлен перехват исключений для Education.
 9. Исправлена работа валидатора для схемы ExperienceUpdate.
 10. В crud ReadAsync, CRUDUser, utilies.tokens исправлены типы uid: str на uid: UUID.
+11. Поля link_id, social_network_id заменены на id в схеме, сервисах и тестах user_info.
 
 #### Используемые инструменты:
 1. Python v3.11;
