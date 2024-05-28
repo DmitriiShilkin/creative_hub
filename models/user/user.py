@@ -10,29 +10,34 @@ from sqlalchemy.sql import expression, func
 
 from constants.i18n import Languages
 from models.base import Base
-from models.m2m import EventOrganizers, EventSpeakers
+from models.m2m import CalendarEventUsers, EventOrganizers, EventSpeakers
 from storages.s3_users import users_storage
-
-from ..frilance import Proposal, ProposalStatus
-from .favorite_user import FavoriteUsers
 
 if TYPE_CHECKING:
     from models import (
+        CalendarEvent,
+        CalendarEventComment,
         City,
         Education,
+        Event,
+        Favorite,
         Job,
+        JobView,
         Link,
         Mentorship,
         Organisation,
+        PrivateSite,
         Project,
+        Proposal,
+        ProposalStatus,
         ProposalTableConfig,
         SocialNetwork,
+        TextDocument,
+        UserContact,
         UserExperience,
         UserSpecialization,
         VerificationCode,
     )
-    from models.event import Event
-    from models.user.private_site import PrivateSite
 
 
 class User(Base):
@@ -115,18 +120,22 @@ class User(Base):
     links: Mapped[list["Link"]] = relationship(
         "Link", back_populates="user", cascade="all, delete-orphan"
     )
+    contact_info: Mapped["UserContact"] = relationship(
+        "UserContact", back_populates="user", cascade="all, delete-orphan"
+    )
     email_verification: Mapped["VerificationCode"] = relationship(
         "VerificationCode",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
     )
-    favorite_users = relationship(
-        "User",
-        secondary=FavoriteUsers.__table__,
-        primaryjoin=id == FavoriteUsers.user_id,
-        secondaryjoin=id == FavoriteUsers.favorite_user_id,
+
+    favorites: Mapped[list["Favorite"]] = relationship(
+        "Favorite",
+        back_populates="user",
+        foreign_keys="[Favorite.user_id]",
     )
+
     authored_projects: Mapped[list["Project"]] = relationship(
         "Project", back_populates="author"
     )
@@ -139,31 +148,33 @@ class User(Base):
         "Mentorship",
         back_populates="user",
     )
-    created_organisations: Mapped["Organisation"] = relationship(
+    created_organisations: Mapped[list["Organisation"]] = relationship(
         "Organisation", back_populates="creator"
     )
-
     education: Mapped[list["Education"]] = relationship(
         "Education",
         back_populates="user",
     )
-
-    authored_jobs: Mapped["Job"] = relationship(
+    authored_jobs: Mapped[list["Job"]] = relationship(
         "Job",
         back_populates="author",
     )
     proposals: Mapped[list["Proposal"]] = relationship(
         "Proposal", back_populates="user", foreign_keys="[Proposal.user_id]"
     )
+    job_views: Mapped[list["JobView"]] = relationship(
+        "JobView",
+        back_populates="user",
+    )
     updated_proposals: Mapped[list["Proposal"]] = relationship(
         "Proposal",
         back_populates="updated_by",
         foreign_keys="[Proposal.updated_by_id]",
     )
-    proposal_statuses: Mapped["ProposalStatus"] = relationship(
+    proposal_statuses: Mapped[list["ProposalStatus"]] = relationship(
         "ProposalStatus", back_populates="user"
     )
-    proposal_table_config: Mapped["ProposalTableConfig"] = relationship(
+    proposal_table_config: Mapped[list["ProposalTableConfig"]] = relationship(
         "ProposalTableConfig", back_populates="user"
     )
     language: Mapped[Optional[Languages]] = mapped_column(
@@ -182,6 +193,23 @@ class User(Base):
     )
     created_events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="creator"
+    )
+    created_text_documents: Mapped[list["TextDocument"]] = relationship(
+        "TextDocument", back_populates="author"
+    )
+
+    calendar_events_participant: Mapped[list["CalendarEvent"]] = relationship(
+        "CalendarEvent",
+        secondary=CalendarEventUsers.__table__,
+        back_populates="participants",
+    )
+    calendar_events_organizer: Mapped[list["CalendarEvent"]] = relationship(
+        "CalendarEvent",
+        back_populates="organizer",
+    )
+    calendar_comments: Mapped[list["CalendarEventComment"]] = relationship(
+        "CalendarEventComment",
+        back_populates="author",
     )
 
     @property

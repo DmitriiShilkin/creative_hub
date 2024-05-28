@@ -3,6 +3,7 @@
 ### Тесты:
 1. Для endpoints USER EXPERIENCE, плюс фикстуры, для моделей Country, City 
 добавлены схемы CreateDB.
+2. Для endpoints Calendar Events, Calendar Comments, плюс фикстуры.
 
 ### Разработка:
 1. Исправлен crud для удаления в endpoint Delete Proposal.
@@ -23,6 +24,9 @@ social_networks, links, experience. Скорректирована схема Us
 9. Исправлена работа валидатора для схемы ExperienceUpdate.
 10. В crud ReadAsync, CRUDUser, utilies.tokens исправлены типы uid: str на uid: UUID.
 11. Поля link_id, social_network_id заменены на id в схеме, сервисах и тестах user_info.
+12. Добавлены endpoints Calendar Events, Calendar Comments. Разработаны модели CalendarEvent, 
+CalendarComment, константы, CRUD, сервисы, схемы и валидаторы для них. Добавлена поддержка
+в модель, схему и CRUD User. Добавлен вью для админки.
 
 #### Используемые инструменты:
 1. Python v3.11;
