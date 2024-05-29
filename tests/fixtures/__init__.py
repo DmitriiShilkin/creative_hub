@@ -1,5 +1,6 @@
 from .calendar import *  # noqa: F403, F401
 from .city import *  # noqa: F403, F401
+from .contact_person import *  # noqa: F403, F401
 from .country import *  # noqa: F403, F401
 from .direction import *  # noqa: F403, F401
 from .job import *  # noqa: F403, F401

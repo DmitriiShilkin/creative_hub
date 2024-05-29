@@ -4,6 +4,8 @@
 1. Для endpoints USER EXPERIENCE, плюс фикстуры, для моделей Country, City 
 добавлены схемы CreateDB.
 2. Для endpoints Calendar Events, Calendar Comments, плюс фикстуры.
+3. В тест API test_user_info добавлены 2 теста без схемы PrivateSite, написана
+фикстура PrivateSite.
 
 ### Разработка:
 1. Исправлен crud для удаления в endpoint Delete Proposal.
@@ -27,6 +29,8 @@ social_networks, links, experience. Скорректирована схема Us
 12. Добавлены endpoints Calendar Events, Calendar Comments. Разработаны модели CalendarEvent, 
 CalendarComment, константы, CRUD, сервисы, схемы и валидаторы для них. Добавлена поддержка
 в модель, схему и CRUD User. Добавлен вью для админки.
+13. В endpoint UserInfo PUT добавлен PrivateSite, изменена схема, переписан сервис 
+для создания и обновления PrivateSite.
 
 #### Используемые инструменты:
 1. Python v3.11;

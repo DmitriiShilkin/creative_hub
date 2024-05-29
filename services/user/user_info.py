@@ -4,11 +4,17 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud.link import crud_link
+from crud.private_site import crud_private_site
 from crud.social_network import crud_social_network
 from crud.user import crud_user
 from crud.user_contact import crud_user_contact
 from models import User
 from schemas.link import LinkCreateDB, LinkUpdateDB
+from schemas.private_site import (
+    PrivateSiteCreate,
+    PrivateSiteCreateDB,
+    PrivateSiteUpdate,
+)
 from schemas.social_network import SocialNetworkCreateDB, SocialNetworkUpdateDB
 from schemas.user.user_info import (
     LinkCreateUpdate,
@@ -27,6 +33,9 @@ async def create_update_user_info(
         await create_or_update_links(db=db, schemas=schema.links, user=user)
         await create_or_update_networks(
             db=db, schemas=schema.networks, user=user
+        )
+        await create_or_update_private_site(
+            db=db, schema=schema.private_site, user=user
         )
         await crud_user_contact.update(
             db=db,
@@ -118,3 +127,28 @@ async def create_or_update_networks(
         await crud_social_network.remove_bulk(
             db=db, ids=ids_to_delete, commit=False
         )
+
+
+async def create_or_update_private_site(
+    db: AsyncSession, schema: PrivateSiteCreate, user: User
+) -> None:
+    if not schema and user.private_site:
+        await crud_private_site.remove(
+            db=db, obj_id=user.private_site.id, commit=False
+        )
+    elif schema:
+        if user.private_site:
+            update_schema = PrivateSiteUpdate(**schema.model_dump())
+            await crud_private_site.update(
+                db=db,
+                db_obj=user.private_site,
+                update_data=update_schema,
+                commit=False,
+            )
+        else:
+            create_schema = PrivateSiteCreateDB(
+                **schema.model_dump(), user_id=user.id
+            )
+            await crud_private_site.create(
+                db=db, create_schema=create_schema, commit=False
+            )
