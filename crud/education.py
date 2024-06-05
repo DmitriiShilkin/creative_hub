@@ -1,6 +1,7 @@
 from typing import List, Optional
 
-from sqlalchemy import desc, insert, select
+from pydantic import BaseModel
+from sqlalchemy import desc, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -13,6 +14,7 @@ from schemas.user.education import (
     EducationCreateDB,
     EducationResponse,
     EducationUpdateDB,
+    EducationUpdateSingle,
 )
 
 
@@ -131,6 +133,34 @@ class CRUDEducation(
             )
         )
         result = await db.execute(statement)
+        return result.scalars().first()
+
+    async def update(
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: Education,
+        update_data: EducationUpdateSingle,
+        commit: bool = True,
+    ) -> Education:
+        if isinstance(update_data, BaseModel):
+            update_data = update_data.model_dump(
+                exclude_unset=True, exclude_none=True
+            )
+        if not update_data:
+            return db_obj
+        statement = (
+            update(self.model)
+            .values(**update_data)
+            .where(self.model.id == db_obj.id)
+            .returning(self.model)
+            .options(
+                selectinload(self.model.certificates),
+            )
+        )
+        result = await db.execute(statement)
+        if commit:
+            await db.commit()
         return result.scalars().first()
 
 
