@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, load_only
 
 from crud.async_crud import BaseAsyncCRUD
 from models import (
@@ -81,6 +81,25 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
                 joinedload(self.model.contact_info),
                 joinedload(self.model.favorites),
                 joinedload(self.model.city).joinedload(City.country),
+                joinedload(self.model.profile_completeness),
+            )
+        )
+        result = await db.execute(statement)
+        return result.scalars().first()
+
+    async def get_by_uid_fast(
+        self, db: AsyncSession, *, uid: UUID
+    ) -> Optional[User]:
+        statement = (
+            select(self.model)
+            .where(
+                self.model.uid == uid,
+                self.model.is_deleted.is_(False),
+            )
+            .options(
+                load_only(
+                    self.model.id, self.model.uid, self.model.last_visited_at
+                )
             )
         )
         result = await db.execute(statement)
@@ -110,7 +129,9 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
             .options(
                 joinedload(self.model.city).joinedload(City.country),
                 joinedload(self.model.authored_projects).options(
-                    joinedload(Project.coauthors), joinedload(Project.keywords)
+                    joinedload(Project.coauthors),
+                    joinedload(Project.keywords),
+                    joinedload(Project.image),
                 ),
                 joinedload(self.model.mentorship).options(
                     joinedload(Mentorship.specializations).joinedload(
@@ -144,6 +165,7 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
                     ),
                 ),
                 joinedload(self.model.contact_info),
+                joinedload(self.model.profile_completeness),
             )
         )
         result = await db.execute(statement)

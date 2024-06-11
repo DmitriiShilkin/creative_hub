@@ -10,7 +10,12 @@ from sqlalchemy.sql import expression, func
 
 from constants.i18n import Languages
 from models.base import Base
-from models.m2m import CalendarEventUsers, EventOrganizers, EventSpeakers
+from models.m2m import (
+    CalendarEventUsers,
+    EventOrganizers,
+    EventParticipants,
+    EventSpeakers,
+)
 from storages.s3_users import users_storage
 
 if TYPE_CHECKING:
@@ -27,6 +32,7 @@ if TYPE_CHECKING:
         Mentorship,
         Organisation,
         PrivateSite,
+        ProfileCompleteness,
         Project,
         Proposal,
         ProposalStatus,
@@ -136,6 +142,12 @@ class User(Base):
         foreign_keys="[Favorite.user_id]",
     )
 
+    profile_completeness: Mapped["ProfileCompleteness"] = relationship(
+        "ProfileCompleteness",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
     authored_projects: Mapped[list["Project"]] = relationship(
         "Project", back_populates="author"
     )
@@ -191,6 +203,12 @@ class User(Base):
         secondary=EventSpeakers.__table__,
         back_populates="speakers",
     )
+    events_attending: Mapped[list["Event"]] = relationship(
+        "Event",
+        secondary=EventParticipants.__table__,
+        back_populates="participants",
+    )
+
     created_events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="creator"
     )

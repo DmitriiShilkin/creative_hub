@@ -1,8 +1,5 @@
 from fastapi import APIRouter
 
-from api.v1.endpoints.favorite.favorite_user import (
-    router as favorite_user_router,
-)
 from api.v1.endpoints.user.user_experience import (
     router as user_experience_router,
 )
@@ -19,10 +16,11 @@ from .endpoints.direction import router as direction_router
 from .endpoints.emails.change_email import router as change_email
 from .endpoints.emails.vefiry_email import router as email_verify_router
 from .endpoints.event import router as event_router
+from .endpoints.favorite.favorite_event import router as favorite_event
 from .endpoints.favorite.favorite_organisation import (
     router as favorite_organisation,
 )
-from .endpoints.favorite.favorite_user import router as favorite
+from .endpoints.favorite.favorite_user import router as favorite_user
 from .endpoints.frilance.custom_fields.proposal_choice import (
     router as proposal_field_choice_router,
 )
@@ -62,6 +60,9 @@ from .endpoints.user.contact_person_job import (
 )
 from .endpoints.user.education import router as user_education_router
 from .endpoints.user.mentorship import router as mentorship_router
+from .endpoints.user.profile_completeness import (
+    router as profile_completeness_router,
+)
 from .endpoints.user.user import router as user_router
 from .endpoints.user.user_catalogs import router as user_catalogs_router
 
@@ -70,14 +71,16 @@ router = APIRouter(prefix="/v1")
 router.include_router(search_router, prefix="/search", tags=["Search"])
 router.include_router(user_router, prefix="/user", tags=["User"])
 router.include_router(
+    favorite_user,
+    prefix="/favorite-users",
+    tags=["Favorite users"],
+)
+router.include_router(
     user_catalogs_router,
     prefix="",
     tags=["Users Catalog"],
 )
 router.include_router(auth_router, prefix="", tags=["Auth"])
-router.include_router(
-    favorite_user_router, prefix="/favorite", tags=["Favorite User"]
-)
 router.include_router(country_router, prefix="/country", tags=["Location"])
 router.include_router(city_router, prefix="/city", tags=["Location"])
 
@@ -135,6 +138,11 @@ router.include_router(
     prefix="/contact-person/event",
     tags=["Contact Person Event"],
 )
+router.include_router(
+    favorite_event,
+    prefix="/favorite-events",
+    tags=["Favorite event"],
+)
 router.include_router(job_router, prefix="/job", tags=["Jobs"])
 router.include_router(
     proposal_router, prefix="/job-proposal", tags=["Job Proposals"]
@@ -178,11 +186,6 @@ router.include_router(
     tags=["Contact Person Organisation"],
 )
 router.include_router(
-    favorite,
-    prefix="/favorite-users",
-    tags=["Favorite users"],
-)
-router.include_router(
     favorite_organisation,
     prefix="/favorite-organisations",
     tags=["Favorite organisations"],
@@ -201,4 +204,9 @@ router.include_router(
     calendar_comments_router,
     prefix="/calendar/comment",
     tags=["Calendar Comments"],
+)
+router.include_router(
+    profile_completeness_router,
+    prefix="/profile-completeness",
+    tags=["User ProfileCompleteness"],
 )
