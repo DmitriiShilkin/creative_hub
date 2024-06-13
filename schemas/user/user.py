@@ -12,6 +12,7 @@ from schemas.common import PasswordBase
 from schemas.email_validator import EmailStrLower
 from schemas.social_network import SocialNetworkResponse
 from schemas.specialization import SpecializationWithDirectionResponse
+from schemas.timezone import TimezoneResponse
 
 
 class UserBase(BaseModel):
@@ -46,6 +47,7 @@ class UserUpdate(BaseModel):
     birthday: Optional[date] = None
     language: Optional[Languages] = None
     city_id: Optional[PositiveInt] = None
+    timezone_id: Optional[PositiveInt] = None
 
 
 class UserSimpleResponse(UserBase):
@@ -53,11 +55,14 @@ class UserSimpleResponse(UserBase):
     username: Optional[str] = None
     photo: Optional[str] = None
     last_visited_at: Optional[datetime] = None
+    profile_cover: Optional[str] = None
 
 
 class UserResponse(UserSimpleResponse):
     language: Optional[Languages] = None
     city: Optional[CityWithCountryResponse] = None
+    birthday: Optional[datetime] = None
+    timezone: Optional[TimezoneResponse] = None
 
 
 class UserDetailResponse(UserSimpleResponse):
@@ -89,6 +94,12 @@ class UserParticipantResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+class UserEventResponse(BaseModel):
+    first_name: str
+    second_name: str
+    photo: Optional[str] = None
 
 
 class UserCalendarResponse(BaseModel):

@@ -39,6 +39,7 @@ if TYPE_CHECKING:
         ProposalTableConfig,
         SocialNetwork,
         TextDocument,
+        Timezone,
         UserContact,
         UserExperience,
         UserSpecialization,
@@ -110,6 +111,12 @@ class User(Base):
     city: Mapped["City"] = relationship("City", back_populates="users")
     experience: Mapped[list["UserExperience"]] = relationship(
         "UserExperience", back_populates="user"
+    )
+    timezone_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("timezone.id"), nullable=True
+    )
+    timezone: Mapped["Timezone"] = relationship(
+        "Timezone", back_populates="users"
     )
     specialization: Mapped["UserSpecialization"] = relationship(
         "UserSpecialization", back_populates="user"

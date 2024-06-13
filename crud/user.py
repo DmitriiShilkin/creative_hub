@@ -128,6 +128,7 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
             )
             .options(
                 joinedload(self.model.city).joinedload(City.country),
+                joinedload(self.model.timezone),
                 joinedload(self.model.authored_projects).options(
                     joinedload(Project.coauthors),
                     joinedload(Project.keywords),
@@ -187,7 +188,10 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
             .where(self.model.id == db_obj.id)
             .values(**update_data)
             .returning(self.model)
-            .options(joinedload(self.model.city).joinedload(City.country))
+            .options(
+                joinedload(self.model.city).joinedload(City.country),
+                joinedload(self.model.timezone),
+            )
         )
         result = await db.execute(stmt)
         obj = result.scalars().first()
