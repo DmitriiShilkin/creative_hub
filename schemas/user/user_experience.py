@@ -1,7 +1,13 @@
 from datetime import UTC, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
 from constants.user.user_experience import EXPERIENCE_START_YEAR_MIN
 from schemas.city import CityWithCountryResponse
@@ -85,3 +91,12 @@ class ExperienceUpdate(BaseModel):
 class ExperienceResponse(ExperienceBase):
     id: int
     city: CityWithCountryResponse
+
+
+class ExperienceCatalogResponse(BaseModel):
+    id: PositiveInt
+    start_month: int
+    start_year: int
+    end_month: Optional[int]
+    end_year: Optional[int]
+    still_working: bool
