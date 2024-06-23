@@ -11,6 +11,7 @@
 6. Для endpoints UserUpdate добавлен тест таймзон.
 7. Для endpoints Mentorship изменена фикстура, изменены тесты API.
 8. Для endpoints User Catalog добавлены тесты API.
+9. Для endpoints User Specialization изменена фикстура, изменены тесты API.
 
 ### Разработка:
 1. Исправлен crud для удаления в endpoint Delete Proposal.
@@ -47,6 +48,9 @@ UserResponseFull, создана миграция, в crud_user добавлен
 18. Добавлена константа для выборочной подгрузки данных из модели UserExperience,
 изменены схемы UserCatalog, в схемы UserExperience добавлена ExperienceCatalogResponse,
 в crud добавлена подгрузка experience.
+19. В модель UserSpecialization добавлены атрибуты price, currency, payment_per,
+is_ready_to_move, is_ready_for_remote_work. Добавлены атрибуты в схемы, добавлен валидатор.
+Написана миграция.
 
 #### Используемые инструменты:
 1. Python v3.11;
