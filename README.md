@@ -51,6 +51,7 @@ UserResponseFull, создана миграция, в crud_user добавлен
 19. В модель UserSpecialization добавлены атрибуты price, currency, payment_per,
 is_ready_to_move, is_ready_for_remote_work. Добавлены атрибуты в схемы, добавлен валидатор.
 Написана миграция.
+20. Для карточек Job добавлен признак "Просмотрено" в ленте. Поменялся круд и схема.
 
 #### Используемые инструменты:
 1. Python v3.11;
