@@ -11,12 +11,22 @@ from .endpoints.auth import router as auth_router
 from .endpoints.calendar.comments import router as calendar_comments_router
 from .endpoints.calendar.events import router as calendar_events_router
 from .endpoints.city import router as city_router
+from .endpoints.contact_person.contact_person_event import (
+    router as contact_person_event_router,
+)
+from .endpoints.contact_person.contact_person_job import (
+    router as contact_person_job_router,
+)
+from .endpoints.contact_person.contact_person_organisation import (
+    router as contact_person_organisation_router,
+)
 from .endpoints.country import router as country_router
 from .endpoints.direction import router as direction_router
 from .endpoints.emails.change_email import router as change_email
 from .endpoints.emails.vefiry_email import router as email_verify_router
 from .endpoints.event import router as event_router
 from .endpoints.favorite.favorite_event import router as favorite_event
+from .endpoints.favorite.favorite_job import router as favorite_job
 from .endpoints.favorite.favorite_organisation import (
     router as favorite_organisation,
 )
@@ -37,9 +47,7 @@ from .endpoints.frilance.proposal_table_config import (
 )
 from .endpoints.keyword import router as keyword_router
 from .endpoints.link import router as link_router
-from .endpoints.organisation.contact_person_organisation import (
-    router as contact_person_organisation_router,
-)
+from .endpoints.media_file import router as media_file_router
 from .endpoints.organisation.organisation import router as organisation_router
 from .endpoints.organisation.organisation_file import (
     router as organisation_file_router,
@@ -49,15 +57,10 @@ from .endpoints.password.password_reset import router as reset_password
 from .endpoints.private_site import router as private_site_router
 from .endpoints.project import router as project_router
 from .endpoints.search import router as search_router
-from .endpoints.social_network import router as social_network_router
+from .endpoints.slugs import router as slugs_router
 from .endpoints.specialization import router as specialization_router
 from .endpoints.text_document import router as text_document_router
-from .endpoints.user.contact_person_event import (
-    router as contact_person_event_router,
-)
-from .endpoints.user.contact_person_job import (
-    router as contact_person_job_router,
-)
+from .endpoints.timezone import router as timezone_router
 from .endpoints.user.education import router as user_education_router
 from .endpoints.user.mentorship import router as mentorship_router
 from .endpoints.user.profile_completeness import (
@@ -69,6 +72,7 @@ from .endpoints.user.user_catalogs import router as user_catalogs_router
 router = APIRouter(prefix="/v1")
 
 router.include_router(search_router, prefix="/search", tags=["Search"])
+router.include_router(slugs_router, prefix="/slug", tags=["Slugs"])
 router.include_router(user_router, prefix="/user", tags=["User"])
 router.include_router(
     favorite_user,
@@ -83,6 +87,7 @@ router.include_router(
 router.include_router(auth_router, prefix="", tags=["Auth"])
 router.include_router(country_router, prefix="/country", tags=["Location"])
 router.include_router(city_router, prefix="/city", tags=["Location"])
+router.include_router(timezone_router, prefix="/timezone", tags=["Timezone"])
 
 router.include_router(
     direction_router, prefix="/direction", tags=["Direction"]
@@ -113,9 +118,6 @@ router.include_router(
 router.include_router(link_router, prefix="/link", tags=["Link"])
 router.include_router(
     private_site_router, prefix="/private_site", tags=["Private Site"]
-)
-router.include_router(
-    social_network_router, prefix="/social-network", tags=["Social Network"]
 )
 router.include_router(
     email_verify_router, prefix="/email-verify", tags=["Email Verify"]
@@ -171,6 +173,11 @@ router.include_router(
     tags=["Contact Person Job"],
 )
 router.include_router(
+    favorite_job,
+    prefix="/favorite-jobs",
+    tags=["Favorite jobs"],
+)
+router.include_router(
     organisation_router,
     prefix="/organisation",
     tags=["Organisation"],
@@ -209,4 +216,10 @@ router.include_router(
     profile_completeness_router,
     prefix="/profile-completeness",
     tags=["User ProfileCompleteness"],
+)
+
+router.include_router(
+    media_file_router,
+    prefix="/media_file",
+    tags=["Media Files"],
 )

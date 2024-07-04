@@ -6,16 +6,15 @@ from sqlalchemy.orm import aliased, joinedload, with_loader_criteria
 from sqlalchemy.sql.selectable import Select
 
 from api.filters.job import JobFilter
-from crud.async_crud import BaseAsyncCRUD
+from crud.crud_mixins import BaseCRUD, ReadAsync
 from databases.queryset import QuerySet
-from models import City, Country, Job, Proposal, Specialization, View
+from models import City, Country, Favorite, Job, Proposal, Specialization, View
 from models.m2m import JobSpecializations
 from schemas.crud.job import JobDataBaseDTO
-from schemas.frilance.job import JobCreateDB, JobUpdate
 from utilities.paginated_response import job_response_with_count
 
 
-class CRUDJobWithCounters(BaseAsyncCRUD[Job, JobCreateDB, JobUpdate]):
+class CRUDJobWithCounters(BaseCRUD[Job], ReadAsync[Job]):
     async def get_by_id(
         self,
         db: AsyncSession,
@@ -82,8 +81,9 @@ class CRUDJobWithCounters(BaseAsyncCRUD[Job, JobCreateDB, JobUpdate]):
     async def get_multi(
         self,
         db: AsyncSession,
+        favorite: bool,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 20,
         author_id: Optional[int] = None,
         current_user_id: Optional[int] = None,
         current_user_ip: Optional[str] = None,
@@ -142,6 +142,13 @@ class CRUDJobWithCounters(BaseAsyncCRUD[Job, JobCreateDB, JobUpdate]):
         )
         if author_id:
             statement = statement.where(self.model.author_id == author_id)
+        if favorite:
+            statement = statement.where(
+                and_(
+                    Favorite.job_id == self.model.id,
+                    Favorite.user_id == current_user_id,
+                )
+            )
         if filters:
             if filters.accepted_languages__in:
                 statement = statement.filter(
