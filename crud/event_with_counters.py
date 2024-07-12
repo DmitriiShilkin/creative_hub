@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Dict, List, Optional
 
 from sqlalchemy import (
@@ -20,7 +20,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.sql.selectable import Select
 
-from api.filters.event import EventFilters
+from api.filters.event import AuthorEventFilters, EventFilters
 from constants.i18n import Languages
 from crud.crud_mixins import BaseCRUD, ReadAsync
 from models import (
@@ -35,11 +35,11 @@ from models import (
 from models.m2m import EventParticipants
 from utilities.exception import QuerySet
 from utilities.i18n import detect_language
-from utilities.paginated_response import job_response_with_count
+from utilities.paginated_response import response_with_count
 
 
 class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
-    def __init__(self, model):
+    def __init__(self, model: Event) -> None:
         super().__init__(model)
         self.common_options = (
             joinedload(self.model.specializations),
@@ -73,7 +73,7 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         author_id: Optional[int] = None,
         current_user_ip: Optional[str] = None,
     ) -> Optional[Dict]:
-        subquery = await self._get_subquery_for_EventView(
+        subquery = await self._get_subquery_for_event_view(
             author_id, current_user_ip
         )
         all_event_views = aliased(EventView)
@@ -142,7 +142,7 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         current_user_ip: Optional[str] = None,
         filters: Optional[EventFilters] = None,
     ) -> Optional[Dict]:
-        subquery = await self._get_subquery_for_EventView(
+        subquery = await self._get_subquery_for_event_view(
             current_user_id, current_user_ip
         )
         all_event_views = aliased(EventView)
@@ -170,7 +170,8 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
             )
             .outerjoin(subquery, subquery.c.event_id == self.model.id)
             .where(
-                self.model.end_datetime > datetime.now(tz=timezone.utc),
+                self.model.is_draft.is_(False),
+                self.model.end_datetime > datetime.now(tz=UTC),
             )
             .options(
                 contains_eager(self.model.event_views, alias=subquery),
@@ -195,13 +196,8 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         )
         if author_id:
             statement = statement.where(
-                or_(
-                    self.model.creator_id == author_id,
-                    self.model.is_draft.is_(False),
-                )
+                self.model.creator_id == author_id,
             )
-        else:
-            statement = statement.where(self.model.is_draft.is_(False))
         if favorite:
             statement = statement.where(
                 and_(
@@ -225,7 +221,7 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                 )
         result = await db.execute(statement)
         rows = result.unique().mappings().all()
-        return await job_response_with_count(limit, skip, rows)
+        return await response_with_count(limit, skip, rows)
 
     async def get_multi_for_author(
         self,
@@ -234,9 +230,9 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         skip: int = 0,
         limit: int = 20,
         author_id: Optional[int] = None,
-        filters: Optional[EventFilters] = None,
+        filters: Optional[AuthorEventFilters] = None,
     ) -> Optional[Dict]:
-        subquery = await self._get_subquery_for_EventView(
+        subquery = await self._get_subquery_for_event_view(
             current_user_id=author_id
         )
         all_event_views = aliased(EventView)
@@ -300,9 +296,18 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                         )
                     )
                 )
+            if filters.is_archived is not None:
+                statement = statement.where(
+                    self.model.is_archived == filters.is_archived
+                )
+            if filters.is_draft is not None:
+                statement = statement.where(
+                    self.model.is_draft == filters.is_draft
+                )
+
         result = await db.execute(statement)
         rows = result.unique().mappings().all()
-        return await job_response_with_count(limit, skip, rows)
+        return await response_with_count(limit, skip, rows)
 
     async def get_multi_by_ids(
         self,
@@ -313,7 +318,7 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
     ) -> Optional[QuerySet[RowMapping]]:
         if not ids:
             return []
-        subquery = await self._get_subquery_for_EventView(
+        subquery = await self._get_subquery_for_event_view(
             current_user_id, current_user_ip
         )
         statement = (
@@ -336,7 +341,7 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
             .where(
                 self.model.id.in_(ids),
                 self.model.is_draft.is_(False),
-                self.model.end_datetime > datetime.now(tz=timezone.utc),
+                self.model.end_datetime > datetime.now(tz=UTC),
             )
             .options(
                 contains_eager(self.model.event_views, alias=subquery),
@@ -356,17 +361,20 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         result.model = self.model
         return result
 
-    async def _get_subquery_for_EventView(
+    async def _get_subquery_for_event_view(
         self,
         current_user_id: Optional[int] = None,
         current_user_ip: Optional[str] = None,
     ) -> Select:
         return (
             select(EventView).where(
-                and_(
-                    EventView.ip_address == current_user_ip,
+                or_(
                     EventView.user_id == current_user_id,
-                ),
+                    and_(
+                        EventView.user_id.is_(None),
+                        EventView.ip_address == current_user_ip,
+                    ),
+                )
             )
         ).alias("filtered_event_view")
 
