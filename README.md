@@ -64,6 +64,8 @@ is_ready_to_move, is_ready_for_remote_work. Добавлены атрибуты 
 исправлено получение events по author_id,
 добавлено ограничение уникальности (ip_address, event_id) для EventView,
 создана миграция.
+25. В схемах Event extra_languages сделаны обязательными
+добавлена типизация, исправлены несоответствия PEP.
 
 #### Используемые инструменты:
 1. Python v3.11;
