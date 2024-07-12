@@ -1,30 +1,43 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from api.dependencies.auth import get_current_user
 from api.dependencies.database import get_async_db
+from api.dependencies.ip import get_current_user_ip
 from crud.event import crud_event
 from crud.favorite import crud_favorite
 from models import User
 from models.favorite import Favorite
-from schemas.event import EventSimpleResponse
+from schemas.endpoints.paginated_response import EventPaginatedResponse
+from services.user.language import get_user_language
 
 router = APIRouter()
 
 
 @router.get(
     "/",
-    response_model=list[EventSimpleResponse],
+    response_model=EventPaginatedResponse,
     status_code=status.HTTP_200_OK,
 )
 async def read_favorite_events(
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 20,
     current_user: User = Depends(get_current_user),
-):
-    return await crud_favorite.get_events_by_user_id(
-        db=db, user_id=current_user.id, skip=skip, limit=limit
+    current_user_ip: Optional[str] = Depends(get_current_user_ip),
+) -> EventPaginatedResponse:
+    locale = await get_user_language(request=request, db=db, user=current_user)
+    return await crud_favorite.get_events_by_user_id_with_count(
+        db=db,
+        locale=locale,
+        user_id=current_user.id,
+        current_user_ip=current_user_ip,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -36,7 +49,7 @@ async def add_favorite_event(
     event_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
-):
+) -> None:
     found_event = await crud_event.get_by_id_extended(db=db, obj_id=event_id)
     if not found_event:
         raise HTTPException(
@@ -66,7 +79,7 @@ async def remove_favorite_event(
     event_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
-):
+) -> None:
     found_event = await crud_event.get_by_id_extended(db=db, obj_id=event_id)
     if not found_event:
         raise HTTPException(
