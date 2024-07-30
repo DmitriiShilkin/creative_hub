@@ -5,13 +5,14 @@ from redis.asyncio import RedisError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.filters.event import EventFilters
+from api.filters.event import AuthorEventFilters, EventFilters
 from configs.loggers import logger
 from constants.i18n import Languages
 from crud.event_view import crud_event_view
 from crud.event_with_counters import crud_ewc
 from models import Event
 from schemas.endpoints.paginated_response import EventPaginatedResponse
+from schemas.endpoints.pagination import DefaultPagination
 from schemas.event_view import EventView
 from services.redis import get_browsing_now_by_id
 from utilities.queryset import check_found
@@ -22,7 +23,7 @@ async def create_update_event_view_multi(
     events_ids: List[int],
     current_user_id: Optional[int],
     current_user_ip: Optional[str],
-):
+) -> None:
     found_events = await crud_ewc.get_multi_by_ids(
         db=db,
         ids=events_ids,
@@ -82,8 +83,7 @@ async def create_update_event_view(
 async def read_events(
     db: AsyncSession,
     redis: Redis,
-    limit: int,
-    skip: int,
+    pagination: DefaultPagination,
     current_user_id: Optional[int],
     current_user_ip: Optional[str],
     locale: Languages,
@@ -92,9 +92,8 @@ async def read_events(
 ) -> EventPaginatedResponse:
     events = await crud_ewc.get_multi(
         db,
-        limit=limit,
         locale=locale,
-        skip=skip,
+        pagination=pagination,
         current_user_id=current_user_id,
         current_user_ip=current_user_ip,
         filters=filters,
@@ -109,25 +108,45 @@ async def read_events(
 async def read_events_by_author(
     db: AsyncSession,
     redis: Redis,
-    limit: int,
-    skip: int,
+    pagination: DefaultPagination,
     author_id: int,
     current_user_id: Optional[int],
     current_user_ip: Optional[str],
     locale: Languages,
-    filters: EventFilters,
-    favorite: bool,
 ) -> EventPaginatedResponse:
     events = await crud_ewc.get_multi(
         db,
-        limit=limit,
         locale=locale,
-        skip=skip,
+        pagination=pagination,
         current_user_id=current_user_id,
         current_user_ip=current_user_ip,
-        filters=filters,
-        favorite=favorite,
+        filters=None,
+        favorite=False,
         author_id=author_id,
+    )
+    events = EventPaginatedResponse.model_validate(
+        events, from_attributes=True
+    )
+    return await _add_browsing_now(events=events, redis=redis)
+
+
+async def read_attended_events(
+    db: AsyncSession,
+    redis: Redis,
+    pagination: DefaultPagination,
+    current_user_id: Optional[int],
+    current_user_ip: Optional[str],
+    locale: Languages,
+) -> EventPaginatedResponse:
+    events = await crud_ewc.get_multi(
+        db,
+        locale=locale,
+        pagination=pagination,
+        current_user_id=current_user_id,
+        current_user_ip=current_user_ip,
+        filters=None,
+        favorite=False,
+        attended=True,
     )
     events = EventPaginatedResponse.model_validate(
         events, from_attributes=True
@@ -137,19 +156,17 @@ async def read_events_by_author(
 
 async def read_events_for_author(
     db: AsyncSession,
+    filters: AuthorEventFilters,
     redis: Redis,
-    limit: int,
-    skip: int,
+    pagination: DefaultPagination,
     author_id: int,
     locale: Languages,
-    filters: EventFilters,
 ) -> EventPaginatedResponse:
     events = await crud_ewc.get_multi_for_author(
         db,
-        limit=limit,
-        locale=locale,
-        skip=skip,
         filters=filters,
+        locale=locale,
+        pagination=pagination,
         author_id=author_id,
     )
     events = EventPaginatedResponse.model_validate(

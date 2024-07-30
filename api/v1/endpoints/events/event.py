@@ -29,6 +29,7 @@ from models import User, EventParticipants
 from schemas.endpoints.paginated_response import (
     EventPaginatedResponse,
 )
+from schemas.endpoints.pagination import DefaultPagination
 from schemas.event import (
     EventCreateDraft,
     EventLanguagesResponse,
@@ -55,8 +56,7 @@ async def read_events(
     request: Request,
     filters: EventFilters = FilterDepends(EventFilters),
     db: AsyncSession = Depends(get_async_session),
-    limit: int = 20,
-    skip: int = 0,
+    pagination: DefaultPagination = Depends(),
     current_user: Optional[User] = Depends(get_current_user_optional),
     current_user_ip: Optional[str] = Depends(get_current_user_ip),
     redis: Redis = Depends(get_redis),
@@ -72,12 +72,38 @@ async def read_events(
     return await event_read.read_events(
         db=db,
         redis=redis,
-        limit=limit,
-        skip=skip,
+        pagination=pagination,
         current_user_id=current_user_id,
         current_user_ip=current_user_ip,
         filters=filters,
         favorite=favorite,
+        locale=locale,
+    )
+
+
+@router.get("/attended/", response_model=EventPaginatedResponse)
+async def read_attended_events(
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    pagination: DefaultPagination = Depends(),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user_ip: Optional[str] = Depends(get_current_user_ip),
+    redis: Redis = Depends(get_redis),
+):
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication is required to access attended events",
+        )
+    locale = await get_user_language(request=request, db=db, user=current_user)
+    current_user_id = current_user.id if current_user else None
+
+    return await event_read.read_attended_events(
+        db=db,
+        redis=redis,
+        pagination=pagination,
+        current_user_id=current_user_id,
+        current_user_ip=current_user_ip,
         locale=locale,
     )
 
@@ -88,8 +114,7 @@ async def read_events_for_author(
     filters: AuthorEventFilters = FilterDepends(AuthorEventFilters),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
-    limit: int = 20,
-    skip: int = 0,
+    pagination: DefaultPagination = Depends(),
     redis: Redis = Depends(get_redis),
 ):
     locale = await get_user_language(request=request, db=db, user=current_user)
@@ -97,8 +122,7 @@ async def read_events_for_author(
         db=db,
         filters=filters,
         redis=redis,
-        limit=limit,
-        skip=skip,
+        pagination=pagination,
         author_id=current_user.id,
         locale=locale,
     )
@@ -111,8 +135,7 @@ async def read_events_by_author(
     db: AsyncSession = Depends(get_async_session),
     current_user: Optional[User] = Depends(get_current_user_optional),
     current_user_ip: Optional[str] = Depends(get_current_user_ip),
-    limit: int = 20,
-    skip: int = 0,
+    pagination: DefaultPagination = Depends(),
     redis: Redis = Depends(get_redis),
 ):
     found_user = await crud_user.get_by_uid_fast(db=db, uid=author_uid)
@@ -126,9 +149,8 @@ async def read_events_by_author(
     return await event_read.read_events_by_author(
         db=db,
         redis=redis,
-        limit=limit,
+        pagination=pagination,
         author_id=found_user.id,
-        skip=skip,
         current_user_id=current_user_id,
         current_user_ip=current_user_ip,
         locale=locale,
@@ -180,6 +202,7 @@ async def read_event(
             "views": found_event.views,
             "browsing_now": browsing_now,
             "is_favorite": found_event.is_favorite,
+            "is_attended": found_event.is_attended,
         },
     )
 

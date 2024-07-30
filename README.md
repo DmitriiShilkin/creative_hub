@@ -16,6 +16,7 @@
 изменены сопутствующие фикстуры.
 11. Дополнена фикстура Event и добавлены тесты event API (is_attended).
 12. Добавлены тесты event API (publish/unpublish).
+13. Добавлен тест event API (read_attended_events).
 
 ### Разработка:
 1. Исправлен crud для удаления в endpoint Delete Proposal.
@@ -79,6 +80,8 @@ is_ready_to_move, is_ready_for_remote_work. Добавлены атрибуты 
 30. Добавлено поле is_attended в event get response.
 31. Добавлены роуты для публикации и снятия с публикации события - дополнена модель,
 написана миграция, дополнена схема.
+32. Добавлен роут для получения всех посещенных событий - дополнены event_crud_with_counters
+и сервис event_‎read.
 
 #### Используемые инструменты:
 1. Python v3.11;

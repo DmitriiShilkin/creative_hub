@@ -2,10 +2,11 @@ from datetime import datetime, UTC
 from typing import Dict, List, Optional, Type
 
 from sqlalchemy import (
+    Integer,
     RowMapping,
     and_,
+    cast,
     distinct,
-    exists,
     func,
     or_,
     select,
@@ -43,8 +44,8 @@ from models.event_participants import EventParticipants
 from models.m2m import EventSpecializations
 from models.country import Country
 from models.timezone import Timezone
+from schemas.endpoints.pagination import DefaultPagination
 from utilities.exception import QuerySet
-from utilities.i18n import detect_language
 from utilities.paginated_response import response_with_count
 
 
@@ -162,18 +163,21 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         db: AsyncSession,
         favorite: bool,
         locale: Languages,
-        skip: int = 0,
-        limit: int = 20,
+        pagination: DefaultPagination,
         author_id: Optional[int] = None,
         current_user_id: Optional[int] = None,
         current_user_ip: Optional[str] = None,
         filters: Optional[EventFilters] = None,
+        attended: Optional[bool] = None,
     ) -> Optional[Dict]:
         subquery = await self._get_subquery_for_event_view(
             current_user_id, current_user_ip
         )
         favorite_subquery = await self._get_subquery_for_favorite_event(
             event_id=self.model.id, current_user_id=current_user_id
+        )
+        user_view_subquery = await self._get_subquery_for_user_view(
+            current_user_id=current_user_id,
         )
         attended_subquery = await self._get_subquery_for_attended_event(
             event_id=self.model.id, current_user_id=current_user_id
@@ -193,8 +197,10 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                     - func.coalesce(subquery.c.participants_views, 0)
                 ).label("new_participants_count"),
                 func.count().over().label("total_count"),
-                exists(subquery.c.event_id).label("is_viewed_by_current_user"),
                 favorite_subquery.c.is_favorite.label("is_favorite"),
+                func.coalesce(user_view_subquery.c.is_viewed, False).label(
+                    "is_viewed_by_current_user"
+                ),
                 attended_subquery.c.is_attended.label("is_attended"),
             )
             .outerjoin(
@@ -224,6 +230,10 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                 Specialization,
                 Specialization.id == EventSpecializations.specialization_id,
             )
+            .outerjoin(
+                user_view_subquery,
+                user_view_subquery.c.event_id == self.model.id,
+            )
             .where(
                 self.model.end_datetime > datetime.now(tz=UTC),
                 self.model.is_archived.is_(False),
@@ -247,10 +257,11 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                 subquery.c.ip_address,
                 subquery.c.user_id,
                 favorite_subquery.c.is_favorite,
+                user_view_subquery.c.is_viewed,
                 attended_subquery.c.is_attended,
             )
-            .offset(skip)
-            .limit(limit)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
 
         if author_id:
@@ -266,31 +277,26 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                     Favorite.user_id == current_user_id,
                 )
             )
+        if attended:
+            statement = statement.where(
+                attended_subquery.c.is_attended.is_(True),
+            )
         if filters:
             statement = await filters.filter(statement)
             if filters.specializations and filters.specializations.id__in:
                 statement = statement.where(
                     Specialization.id.in_(filters.specializations.id__in)
                 )
-            if filters.city:
-                if filters.city.name__ilike:
-                    request_language = detect_language(
-                        filters.city.name__ilike
-                    )
-                    if request_language:
-                        locale = request_language
-                statement = filters.city.filter(statement)
         result = await db.execute(statement)
         rows = result.unique().mappings().all()
-        return await response_with_count(limit, skip, rows)
+        return await response_with_count(pagination, rows)
 
     async def get_multi_for_author(
         self,
         db: AsyncSession,
+        pagination: DefaultPagination,
         locale: Languages,
         filters: Optional[AuthorEventFilters] = None,
-        skip: int = 0,
-        limit: int = 20,
         author_id: Optional[int] = None,
     ) -> Optional[Dict]:
         subquery = await self._get_subquery_for_event_view(
@@ -341,15 +347,15 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
                 subquery.c.ip_address,
                 subquery.c.user_id,
             )
-            .offset(skip)
-            .limit(limit)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         if filters:
             statement = await filters.filter_query(statement)
 
         result = await db.execute(statement)
         rows = result.unique().mappings().all()
-        return await response_with_count(limit, skip, rows)
+        return await response_with_count(pagination, rows)
 
     async def get_multi_by_ids(
         self,
@@ -407,9 +413,8 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         self,
         db: AsyncSession,
         event_id: int,
+        pagination: DefaultPagination,
         filters: Optional[EventParticipantsFilter] = None,
-        limit: int = 0,
-        skip: int = 20,
     ) -> Optional[Dict]:
         statement = (
             select(
@@ -423,14 +428,14 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
             )
             .join(EventParticipants, EventParticipants.user_id == User.id)
             .where(EventParticipants.event_id == event_id)
-            .offset(skip)
-            .limit(limit)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         if filters:
             statement = await filters.filter(statement)
         result = await db.execute(statement)
         rows = result.unique().mappings().all()
-        return await response_with_count(limit, skip, rows)
+        return await response_with_count(pagination, rows)
 
     async def _get_subquery_for_event_view(
         self,
@@ -502,6 +507,22 @@ class CRUDEventWithCounters(BaseCRUD[Event], ReadAsync[Event]):
         ).where(self.model.creator_id == author_id)
         result = await db.execute(statement)
         return result.fetchone()
+
+    @staticmethod
+    async def _get_subquery_for_user_view(
+        current_user_id: Optional[int] = None,
+    ) -> Select:
+        if current_user_id:
+            return (
+                select(EventView.event_id, literal(True).label("is_viewed"))
+                .where(EventView.user_id == current_user_id)
+                .subquery()
+            )
+
+        return select(
+            cast(literal(None), Integer).label("event_id"),
+            literal(False).label("is_viewed"),
+        ).subquery()
 
     async def _get_subquery_for_attended_event(
         self,

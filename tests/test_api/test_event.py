@@ -65,6 +65,7 @@ class TestEvent:
             event_fixture.id == response_data["objects"][0]["id"]
         ), response_data
         assert response_data["objects"][0]["is_favorite"] is True
+        assert response_data["objects"][0]["is_attended"] is True
 
     async def test_read_event_author_by_wrong_uid(
         self,
@@ -126,6 +127,7 @@ class TestEvent:
             event_fixture.id == response_data["objects"][0]["id"]
         ), response_data
         assert response_data["objects"][0]["is_favorite"] is True
+        assert response_data["objects"][0]["is_attended"] is True
 
     async def test_get_single_event(
         self,
@@ -168,6 +170,7 @@ class TestEvent:
         assert response.status_code == 200
         response_data = response.json()
         assert response_data["is_favorite"] is True
+        assert response_data["is_attended"] is True
         assert response_data["title"] == event_fixture.title
         assert response_data["id"] == event_fixture.id
 
@@ -1870,3 +1873,33 @@ class TestEvent:
             headers=user_2_auth_headers,
         )
         assert response.status_code == 403
+
+    async def test_read_attended_events(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture_2: User,
+        event_fixture: Event,
+    ) -> None:
+        user_2_auth_headers = await get_auth_headers(user_fixture_2)
+        endpoint = f"{ROOT_ENDPOINT}attended/"
+
+        # успешный запрос
+        response = await http_client.get(
+            endpoint,
+            headers=user_2_auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        response_data = response.json()
+        assert isinstance(response_data, dict)
+        assert len(response_data["objects"]) == 1, response_data
+        assert (
+            event_fixture.id == response_data["objects"][0]["id"]
+        ), response_data
+        assert response_data["objects"][0]["is_attended"] is True
+
+        # неуспешный запрос, пользователь не авторизован
+        response = await http_client.get(
+            endpoint,
+        )
+        assert response.status_code == 401
