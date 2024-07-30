@@ -5,7 +5,15 @@ from typing import Callable
 from fastapi import UploadFile
 from httpx import AsyncClient
 
-from models import City, Event, Organisation, Specialization, Timezone, User
+from models import (
+    City,
+    Event,
+    Organisation,
+    Specialization,
+    Timezone,
+    User,
+    Favorite,
+)
 
 ROOT_ENDPOINT = "/ch/v1/event/"
 
@@ -33,6 +41,30 @@ class TestEvent:
         except KeyError as e:
             error_message = f"Отсутствует ожидаемое поле в ответе: {e}"
             raise AssertionError(error_message) from None
+
+    async def test_read_authors_events_with_favorite_filter(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture: User,
+        user_fixture_2: User,
+        event_fixture: Event,
+        event_favorites_list_fixture: Favorite,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture_2)
+        endpoint = f"{ROOT_ENDPOINT}author/{user_fixture.uid}/"
+        response = await http_client.get(
+            endpoint, headers=user_auth_headers, params={"favorite": True}
+        )
+        assert response.status_code == 200
+        response_data = response.json()
+        assert isinstance(response_data, dict)
+        assert len(response_data["objects"]) == 1, response_data
+        assert (
+            event_fixture.id == response_data["objects"][0]["id"]
+        ), response_data
+        assert response_data["objects"][0]["is_favorite"] is True
+        assert response_data["objects"][0]["is_attended"] is True
 
     async def test_read_event_author_by_wrong_uid(
         self,
@@ -68,9 +100,33 @@ class TestEvent:
                 response_data["objects"][0]["description"]
                 == event_fixture.description
             )
+            for event in response_data["objects"]:
+                assert event["is_favorite"] is False
         except KeyError as e:
             error_message = f"Отсутствует ожидаемое поле в ответе: {e}"
             raise AssertionError(error_message) from None
+
+    async def test_read_event_with_favorite_filter(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture_2: User,
+        event_fixture: Event,
+        event_favorites_list_fixture: Favorite,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture_2)
+        response = await http_client.get(
+            ROOT_ENDPOINT, headers=user_auth_headers, params={"favorite": True}
+        )
+        assert response.status_code == 200
+        response_data = response.json()
+        assert isinstance(response_data, dict)
+        assert len(response_data["objects"]) == 1, response_data
+        assert (
+            event_fixture.id == response_data["objects"][0]["id"]
+        ), response_data
+        assert response_data["objects"][0]["is_favorite"] is True
+        assert response_data["objects"][0]["is_attended"] is True
 
     async def test_get_single_event(
         self,
@@ -95,6 +151,27 @@ class TestEvent:
         except KeyError as e:
             error_message = f"Отсутствует ожидаемое поле в ответе: {e}"
             raise AssertionError(error_message) from None
+
+    async def test_read_favorite_event(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture_2: User,
+        event_fixture: Event,
+        event_favorites_list_fixture: Favorite,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture_2)
+        endpoint = f"{ROOT_ENDPOINT}{event_fixture.id}/"
+        response = await http_client.get(
+            endpoint,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 200
+        response_data = response.json()
+        assert response_data["is_favorite"] is True
+        assert response_data["is_attended"] is True
+        assert response_data["title"] == event_fixture.title
+        assert response_data["id"] == event_fixture.id
 
     async def test_get_single_event_by_wrong_id(
         self,
@@ -149,6 +226,7 @@ class TestEvent:
         http_client: AsyncClient,
         get_auth_headers: Callable,
         user_fixture: User,
+        user_fixture_2: User,
         city_fixture: City,
         specialization_fixture_2: Specialization,
         organisation_fixture: Organisation,
@@ -184,16 +262,12 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
                 "organisations_ids": [organisation_fixture.id],
-                "organizers_uids": [str(user_fixture.uid)],
+                "organizers_uids": [str(user_fixture_2.uid)],
                 "is_draft": False,
                 "is_archived": False,
                 "timezone": {"tzcode": "string2", "utc": "string"},
@@ -244,6 +318,7 @@ class TestEvent:
         assert response_data["online_links"] == [
             "https://wwww.creativehub.com/"
         ]
+        assert len(response_data["organizers"]) == 2
 
     async def test_create_event_with_language_in_extra_languages(
         self,
@@ -285,11 +360,7 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
@@ -381,11 +452,7 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
@@ -483,11 +550,7 @@ class TestEvent:
                 "registration_end_type": "Custom before event",
                 "registration_end_datetime": "2024-11-17T06:49:19.667Z",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
@@ -575,11 +638,7 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
@@ -668,10 +727,100 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "Today",
                 "reminders": [
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
+                ],
+                "specializations_ids": [specialization_fixture_2.id],
+                "speakers_uids": [str(user_fixture.uid)],
+                "organisations_ids": [organisation_fixture.id],
+                "organizers_uids": [str(user_fixture.uid)],
+                "is_draft": False,
+                "is_archived": False,
+            }
+        )
+
+        contact_person_data = json.dumps(
+            {
+                "data": [
+                    {
+                        "contact_person_create_data": {
+                            "fullname": "John Doe",
+                            "position": "Manager",
+                            "phone": "1234567890",
+                            "email": "johndoe@example.com",
+                            "messengers": [
+                                {
+                                    "messenger": "VK",
+                                    "messenger_username": "johndoevk",
+                                }
+                            ],
+                            "photo_filename": "johndoe.jpg",
+                        }
+                    }
+                ]
+            }
+        )
+
+        response = await http_client.post(
+            ROOT_ENDPOINT,
+            headers=user_auth_headers,
+            data={
+                "create_data": event_data,
+                "contact_person_data": contact_person_data,
+            },
+            files={
+                "photo": (photo.filename, photo.file, photo.content_type),
+                "event_cover": (
+                    event_cover.filename,
+                    event_cover.file,
+                    event_cover.content_type,
+                ),
+            },
+        )
+        assert response.status_code == 422, response.text
+
+    async def test_create_event_with_invalid_reminders(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture: User,
+        city_fixture: City,
+        specialization_fixture_2: Specialization,
+        organisation_fixture: Organisation,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+
+        photo = UploadFile(
+            filename="photo.jpg", file=BytesIO(b"fake_image_data")
+        )
+        event_cover = UploadFile(
+            filename="cover.jpg", file=BytesIO(b"fake_cover_data")
+        )
+
+        event_data = json.dumps(
+            {
+                "title": "Creativehub Fest",
+                "description": "KH SUMMER FEST",
+                "language": "German",
+                "extra_languages": ["English", "French"],
+                "event_type": "Festival",
+                "is_free": 10,
+                "is_online": False,
+                "city_id": city_fixture.id,
+                "places": [
+                    {
+                        "address": "123 Creative St, Cityville",
+                        "place_name": "Village",
+                    }
+                ],
+                "online_links": ["https://wwww.creativehub.com/"],
+                "start_datetime": "2024-11-15T06:49:19.667Z",
+                "end_datetime": "2024-11-25T06:49:19.667Z",
+                "registration_end_type": "Today",
+                "reminders": [
                     {
                         "reminder_before_event": 1,
                         "reminder_unit": "minutes",
-                        "reminder_time": "string",
+                        "reminder_time": "10:00",
                     }
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
@@ -757,17 +906,13 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
                 "organisations_ids": [organisation_fixture.id],
                 "organizers_uids": [str(user_fixture_2.uid)],
-                "is_draft": True,
+                "is_draft": False,
                 "is_archived": False,
             }
         )
@@ -807,6 +952,55 @@ class TestEvent:
         response_data = response.json()
         assert "Updated Creativehub Fest" in response_data["title"]
         assert response_data["event_type"] == "Exhibition"
+
+    async def test_archive_draft_event(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        event_fixture_2: Event,
+        user_fixture: User,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+
+        update_data = json.dumps(
+            {
+                "is_draft": True,
+                "is_archived": True,
+            }
+        )
+
+        contact_person_data = json.dumps(
+            {
+                "data": [
+                    {
+                        "contact_person_create_data": {
+                            "fullname": "John Doe",
+                            "position": "Manager",
+                            "phone": "1234567890",
+                            "email": "johndoe@example.com",
+                            "messengers": [
+                                {
+                                    "messenger": "VK",
+                                    "messenger_username": "johndoevk",
+                                }
+                            ],
+                            "photo_filename": "johndoe.jpg",
+                        }
+                    }
+                ]
+            }
+        )
+
+        endpoint = f"{ROOT_ENDPOINT}{event_fixture_2.id}/"
+        response = await http_client.patch(
+            endpoint,
+            headers=user_auth_headers,
+            data={
+                "update_data": update_data,
+                "contact_person_data": contact_person_data,
+            },
+        )
+        assert response.status_code == 409
 
     async def test_update_event_with_is_draft(
         self,
@@ -1081,11 +1275,7 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
@@ -1162,11 +1352,7 @@ class TestEvent:
                 "end_datetime": "2024-11-25T06:49:19.667Z",
                 "registration_end_type": "At event start",
                 "reminders": [
-                    {
-                        "reminder_before_event": 1,
-                        "reminder_unit": "minutes",
-                        "reminder_time": "string",
-                    }
+                    {"reminder_before_event": 1, "reminder_unit": "minutes"}
                 ],
                 "specializations_ids": [specialization_fixture_2.id],
                 "speakers_uids": [str(user_fixture.uid)],
@@ -1210,6 +1396,58 @@ class TestEvent:
         )
         assert response.status_code == 422, response.text
 
+    async def test_update_event_with_invalid_reminders(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        event_fixture: Event,
+        user_fixture: User,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+
+        update_data = json.dumps(
+            {
+                "reminders": [
+                    {"reminder_before_event": 1, "reminder_unit": "days"}
+                ],
+                "is_draft": False,
+                "is_archived": False,
+            }
+        )
+
+        contact_person_data = json.dumps(
+            {
+                "data": [
+                    {
+                        "contact_person_create_data": {
+                            "fullname": "John Doe",
+                            "position": "Manager",
+                            "phone": "1234567890",
+                            "email": "johndoe@example.com",
+                            "messengers": [
+                                {
+                                    "messenger": "VK",
+                                    "messenger_username": "johndoevk",
+                                }
+                            ],
+                            "photo_filename": "johndoe.jpg",
+                        }
+                    }
+                ]
+            }
+        )
+
+        endpoint = f"{ROOT_ENDPOINT}{event_fixture.id}/"
+        response = await http_client.patch(
+            endpoint,
+            headers=user_auth_headers,
+            data={
+                "update_data": update_data,
+                "contact_person_data": contact_person_data,
+            },
+        )
+        assert response.status_code == 422
+
     async def test_attend_event_success(
         self,
         user_fixture: User,
@@ -1226,7 +1464,7 @@ class TestEvent:
         response = await http_client.get(endpoint, headers=user_auth_headers)
         assert response.status_code == 200, response.text
         response_data = response.json()
-        assert response_data["participants_count"] == 1
+        assert response_data["participants_count"] == 2
 
     async def test_attend_event_not_found(
         self,
@@ -1391,23 +1629,6 @@ class TestEvent:
         assert response_data["objects"][0]["id"] == event_fixture_3.id
         assert response_data["objects"][0]["is_archived"] is True
 
-    async def test_read_events_for_author_is_archived_wrong_event(
-        self,
-        event_fixture: Event,
-        user_fixture: User,
-        http_client: AsyncClient,
-        get_auth_headers: Callable,
-    ) -> None:
-        user_auth_headers = await get_auth_headers(user_fixture)
-        endpoint = f"{ROOT_ENDPOINT}author/all/"
-        response = await http_client.get(
-            endpoint, headers=user_auth_headers, params={"is_archived": True}
-        )
-        assert response.status_code == 200, response.text
-        response_data = response.json()
-        assert isinstance(response_data["objects"], list)
-        assert response_data["objects"] == []
-
     async def test_read_events_for_author_is_archived_wrong_user(
         self,
         event_fixture_3: Event,
@@ -1424,6 +1645,81 @@ class TestEvent:
         response_data = response.json()
         assert isinstance(response_data["objects"], list)
         assert response_data["objects"] == []
+
+    async def test_read_events_count_for_author(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        event_fixture: Event,
+        event_fixture_2: Event,
+        event_fixture_3: Event,
+        user_fixture: User,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+        endpoint = f"{ROOT_ENDPOINT}author/all/count/"
+        response = await http_client.get(
+            endpoint,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 200
+        response_data = response.json()
+        assert response_data == {
+            "archived_events_count": 1,
+            "draft_events_count": 1,
+            "published_events_count": 1,
+        }
+
+    async def test_read_event_participants(
+        self,
+        event_fixture: Event,
+        user_fixture: User,
+        user_fixture_2: User,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+        endpoint = f"{ROOT_ENDPOINT}participants/{event_fixture.id}/"
+        response = await http_client.get(endpoint, headers=user_auth_headers)
+        assert response.status_code == 200, response.text
+        response_data = response.json()
+        assert isinstance(response_data["objects"], list)
+        assert len(response_data["objects"]) > 0
+        assert (
+            response_data["objects"][0]["first_name"]
+            == user_fixture_2.first_name
+        )
+        assert response_data["objects"][0]["uid"] == str(user_fixture_2.uid)
+
+    async def test_read_event_participants_with_filter(
+        self,
+        event_fixture: Event,
+        user_fixture: User,
+        user_fixture_2: User,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+        endpoint = f"{ROOT_ENDPOINT}participants/{event_fixture.id}/"
+        response = await http_client.get(
+            endpoint, headers=user_auth_headers, params={"search": "another"}
+        )
+        assert response.status_code == 200, response.text
+        response_data = response.json()
+        assert isinstance(response_data["objects"], list)
+        assert len(response_data["objects"]) > 0
+        assert (
+            response_data["objects"][0]["first_name"]
+            == user_fixture_2.first_name
+        )
+        assert response_data["objects"][0]["uid"] == str(user_fixture_2.uid)
+
+        response = await http_client.get(
+            endpoint, headers=user_auth_headers, params={"search": "exist"}
+        )
+        assert response.status_code == 200, response.text
+        response_data = response.json()
+        assert isinstance(response_data["objects"], list)
+        assert len(response_data["objects"]) == 0
 
     async def test_seacrh_event_by_title(
         self,

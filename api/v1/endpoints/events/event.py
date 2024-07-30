@@ -12,15 +12,22 @@ from api.dependencies.auth import get_current_user, get_current_user_optional
 from api.dependencies.database import get_async_db
 from api.dependencies.ip import get_current_user_ip
 from api.dependencies.redis import get_redis
-from api.filters.event import EventFilters
+from api.filters.event import (
+    AuthorEventFilters,
+    EventFilters,
+)
 from constants.event import EventType
 from constants.i18n import EventLanguage
 from crud.event import crud_event
+from crud.event_participants import crud_event_participants
 from crud.event_with_counters import crud_ewc
+from crud.status import crud_status
 from crud.user import crud_user
 from databases.database import get_async_session
-from models import User
-from schemas.endpoints.paginated_response import EventPaginatedResponse
+from models import User, EventParticipants
+from schemas.endpoints.paginated_response import (
+    EventPaginatedResponse,
+)
 from schemas.event import (
     EventCreateDraft,
     EventLanguagesResponse,
@@ -28,12 +35,16 @@ from schemas.event import (
     EventTypesResponse,
     EventUpdate,
     EventWithCountersResponse,
+    EventCountResponse,
 )
 from schemas.user.contact_person import ContactPersonAddCreateMulty
 from services.event import event, event_read
 from services.redis import add_to_redis_browsing_now, get_browsing_now_by_id
 from services.user.language import get_user_language
-from utilities.exception import SomeObjectsNotFound
+from utilities.exception import (
+    SomeObjectsNotFoundError,
+    OperationConstraintError,
+)
 
 router = APIRouter()
 
@@ -50,12 +61,11 @@ async def read_events(
     redis: Redis = Depends(get_redis),
     favorite: bool = False,
 ):
-    if favorite:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication is required to access favorites",
-            )
+    if favorite and not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication is required to access favorites",
+        )
     locale = await get_user_language(request=request, db=db, user=current_user)
     current_user_id = current_user.id if current_user else None
     return await event_read.read_events(
@@ -74,7 +84,7 @@ async def read_events(
 @router.get("/author/all/", response_model=EventPaginatedResponse)
 async def read_events_for_author(
     request: Request,
-    filters: EventFilters = FilterDepends(EventFilters),
+    filters: AuthorEventFilters = FilterDepends(AuthorEventFilters),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
     limit: int = 20,
@@ -84,11 +94,11 @@ async def read_events_for_author(
     locale = await get_user_language(request=request, db=db, user=current_user)
     return await event_read.read_events_for_author(
         db=db,
+        filters=filters,
         redis=redis,
         limit=limit,
         skip=skip,
         author_id=current_user.id,
-        filters=filters,
         locale=locale,
     )
 
@@ -97,21 +107,13 @@ async def read_events_for_author(
 async def read_events_by_author(
     request: Request,
     author_uid: UUID,
-    filters: EventFilters = FilterDepends(EventFilters),
     db: AsyncSession = Depends(get_async_session),
     current_user: Optional[User] = Depends(get_current_user_optional),
     current_user_ip: Optional[str] = Depends(get_current_user_ip),
     limit: int = 20,
     skip: int = 0,
     redis: Redis = Depends(get_redis),
-    favorite: bool = False,
 ):
-    if favorite:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication is required to access favorites",
-            )
     found_user = await crud_user.get_by_uid_fast(db=db, uid=author_uid)
     if not found_user:
         raise HTTPException(
@@ -128,8 +130,6 @@ async def read_events_by_author(
         skip=skip,
         current_user_id=current_user_id,
         current_user_ip=current_user_ip,
-        filters=filters,
-        favorite=favorite,
         locale=locale,
     )
 
@@ -170,7 +170,7 @@ async def read_event(
     browsing_now = await get_browsing_now_by_id(
         redis=redis, event_id=found_event.Event.id
     )
-    found_event = EventWithCountersResponse.model_validate(
+    return EventWithCountersResponse.model_validate(
         obj=found_event.Event,
         from_attributes=True,
         context={
@@ -178,9 +178,24 @@ async def read_event(
             "participants_count": found_event.participants_count,
             "views": found_event.views,
             "browsing_now": browsing_now,
+            "is_favorite": found_event.is_favorite,
+            "is_attended": found_event.is_attended,
         },
     )
-    return found_event
+
+
+@router.get(
+    "/author/all/count/",
+    response_model=EventCountResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def read_events_counts_for_author(
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await crud_ewc.get_events_count_for_author(
+        db=db, author_id=current_user.id
+    )
 
 
 @router.post("/views/")
@@ -198,23 +213,31 @@ async def view_events(
             current_user_id=current_user_id,
             current_user_ip=current_user_ip,
         )
-    except SomeObjectsNotFound as ex:
+    except SomeObjectsNotFoundError as ex:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ex.message
-        )
+        ) from ex
 
 
 @router.post(
     "/",
     response_model=EventResponse,
     status_code=status.HTTP_201_CREATED,
+    description="""
+       **Required fields when `is_draft=True`:** `title`,
+       `is_free`, `is_online`.
+
+       \n**Required fields when `is_draft=False`:** `title`,
+       `organizers_uids`, `is_free`, `is_online`, `timezone_id`,
+       `event_type`, `language`, `start_datetime`, `end_datetime`.
+       """,
 )
 async def create_event(
     create_data: EventCreateDraft,
     contact_person_data: ContactPersonAddCreateMulty,
     photo: Optional[UploadFile] = None,
     event_cover: Optional[UploadFile] = None,
-    contact_person_files: List[UploadFile] = [],
+    contact_person_files: List[UploadFile] = [],  # noqa: B006
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -228,14 +251,14 @@ async def create_event(
             contact_person_data=contact_person_data,
             contact_person_files=contact_person_files,
         )
-    except SomeObjectsNotFound as ex:
+    except SomeObjectsNotFoundError as ex:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ex.message
-        )
+        ) from ex
     except ValidationError as ex:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(ex.errors())
-        )
+        ) from ex
 
 
 @router.patch("/{event_id}/", response_model=EventResponse)
@@ -245,7 +268,7 @@ async def update_event(
     contact_person_data: ContactPersonAddCreateMulty,
     photo: Optional[UploadFile] = None,
     event_cover: Optional[UploadFile] = None,
-    contact_person_files: list[UploadFile] = [],
+    contact_person_files: list[UploadFile] = [],  # noqa: B006
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -273,14 +296,18 @@ async def update_event(
             contact_person_files=contact_person_files,
             user_id=current_user.id,
         )
-    except SomeObjectsNotFound as ex:
+    except SomeObjectsNotFoundError as ex:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ex.message
-        )
+        ) from ex
     except ValidationError as ex:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(ex.errors())
-        )
+        ) from ex
+    except OperationConstraintError as ex:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(ex)
+        ) from ex
 
 
 @router.delete("/{event_id}/", status_code=status.HTTP_204_NO_CONTENT)
@@ -289,13 +316,13 @@ async def delete_event(
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ):
-    event = await crud_event.get_by_id(db=db, obj_id=event_id)
-    if not event:
+    found_event = await crud_event.get_by_id(db=db, obj_id=event_id)
+    if not found_event:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
 
-    if event.creator_id != current_user.id:
+    if found_event.creator_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission!",
@@ -315,12 +342,18 @@ async def attend_event(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
     current_user = await db.merge(current_user)
-    if current_user.id in {user.id for user in found_event.participants}:
+    if current_user.id in {user.user_id for user in found_event.participants}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User already registered for this event.",
         )
-    found_event.participants.append(current_user)
+    found_status = await crud_status.get_new_status_id(db)
+    participant = EventParticipants(
+        event_id=found_event.id,
+        user_id=current_user.id,
+        status_id=found_status,
+    )
+    found_event.participants.append(participant)
     await db.commit()
 
 
@@ -337,14 +370,16 @@ async def cancel_attendance(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
-    current_user = await db.merge(current_user)
-    if current_user.id not in {user.id for user in found_event.participants}:
+
+    found_attendance = await crud_event_participants.get_by_event_and_user_ids(
+        db=db, event_id=event_id, user_id=current_user.id
+    )
+    if not found_attendance:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User not registered for this event.",
         )
-
-    found_event.participants.remove(current_user)
+    await db.delete(found_attendance)
     await db.commit()
 
 

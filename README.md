@@ -14,6 +14,7 @@
 9. Для endpoints User Specialization изменена фикстура, изменены тесты API.
 10. Для endpoints Favorite Jobs добавлена фикстура и тесты API, 
 изменены сопутствующие фикстуры.
+11. Дополнена фикстура Event и добавлены тесты event API.
 
 ### Разработка:
 1. Исправлен crud для удаления в endpoint Delete Proposal.
@@ -74,6 +75,7 @@ is_ready_to_move, is_ready_for_remote_work. Добавлены атрибуты 
 28. Исправлено удаление JobProposal при удалении ProposalStatus - исправлена модель,
 написана миграция.
 29. В EventFilter добавлена фильтрация по типу события.
+30. Добавлено поле is_attended в event get response.
 
 #### Используемые инструменты:
 1. Python v3.11;

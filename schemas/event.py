@@ -1,5 +1,5 @@
 from datetime import datetime, UTC
-from typing import List, Optional, Self, Any
+from typing import List, Optional, Self, Any, Dict
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -17,11 +17,12 @@ from pydantic import (
 
 from constants.event import EventType, RegistrationEndType, ReminderUnits
 from constants.i18n import EventLanguage
-from models import Event
+from models import Event, EventParticipants
 from schemas.city import CityWithCountryResponse
+from schemas.frilance.proposal_status import ProposalStatusResponse
 from schemas.mixins import ExplicitFieldsParseJsonMixin, ParseFromJsonMixin
 from schemas.organisation.organisation import OrganisationShortResponse
-from schemas.specialization import SpecializationResponse
+from schemas.specialization import SpecializationWithDirectionResponse
 from schemas.timezone import TimezoneCreate, TimezoneSimpleResponse
 from schemas.user.contact_person import ContactPersonResponse
 from schemas.user.user import UserEventResponse, UserParticipantResponse
@@ -146,11 +147,22 @@ class EventValidationMixin(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_languages(self) -> "EventCreateDraft":
+        if self.extra_languages and self.language in self.extra_languages:
+            err = (
+                f"Language `{self.language}` cannot be specified "
+                f"in both the `language` and `extra_languages` "
+                f"fields at the same time."
+            )
+            raise RequestValidationError(err)
+        return self
 
-class EventReminder(BaseModel):
+
+class EventReminderCreate(BaseModel):
     reminder_before_event: PositiveInt
     reminder_unit: ReminderUnits
-    reminder_time: str
+    reminder_time: Optional[str] = None
 
     @validator("reminder_before_event")
     @classmethod
@@ -164,6 +176,38 @@ class EventReminder(BaseModel):
                 raise RequestValidationError(err)
             return value
 
+    @model_validator(mode="before")
+    @classmethod
+    def validate_reminder_time(cls, values: Dict) -> Dict:
+        reminder_unit = values.get("reminder_unit")
+        reminder_time = values.get("reminder_time")
+        if (
+            reminder_unit in {ReminderUnits.MINUTES, ReminderUnits.HOURS}
+            and reminder_time is not None
+        ):
+            err = (
+                f"When `reminder_unit` is `{reminder_unit}`, "
+                "`reminder_time` should be empty"
+            )
+            raise ValueError(err)
+        if (
+            reminder_unit
+            in {ReminderUnits.DAYS, ReminderUnits.WEEKS, ReminderUnits.MONTHS}
+            and reminder_time is None
+        ):
+            err = (
+                f"When `reminder_unit` is `{reminder_unit}`, "
+                "`reminder_time` should be provided"
+            )
+            raise ValueError(err)
+        return values
+
+
+class EventReminderResponse(BaseModel):
+    reminder_before_event: PositiveInt
+    reminder_unit: ReminderUnits
+    reminder_time: Optional[str] = None
+
 
 class BaseEvent(BaseModel):
     title: str
@@ -176,7 +220,6 @@ class BaseEvent(BaseModel):
     end_datetime: Optional[datetime]
     registration_end_datetime: Optional[datetime]
     registration_end_type: Optional[RegistrationEndType]
-    reminders: Optional[List[EventReminder]]
     is_draft: bool = True
 
     class Config:
@@ -204,7 +247,9 @@ class EventCreate(EventValidationMixin, BaseEvent):
     organisations_ids: Optional[List[PositiveInt]] = Field(
         default_factory=list
     )
-    reminders: Optional[List[EventReminder]] = Field(default_factory=list)
+    reminders: Optional[List[EventReminderCreate]] = Field(
+        default_factory=list
+    )
 
 
 class EventUpdate(ExplicitFieldsParseJsonMixin):
@@ -227,8 +272,11 @@ class EventUpdate(ExplicitFieldsParseJsonMixin):
     speakers_uids: Optional[List[UUID]] = None
     specializations_ids: Optional[List[PositiveInt]] = None
     organisations_ids: Optional[List[PositiveInt]] = None
-    reminders: Optional[List[EventReminder]] = Field(default_factory=list)
+    reminders: Optional[List[EventReminderCreate]] = Field(
+        default_factory=list
+    )
     is_draft: Optional[bool] = None
+    is_archived: Optional[bool] = None
 
 
 class EventCreateDraft(ParseFromJsonMixin):
@@ -255,7 +303,9 @@ class EventCreateDraft(ParseFromJsonMixin):
     organisations_ids: Optional[List[PositiveInt]] = Field(
         default_factory=list
     )
-    reminders: Optional[List[EventReminder]] = Field(default_factory=list)
+    reminders: Optional[List[EventReminderCreate]] = Field(
+        default_factory=list
+    )
     is_draft: bool = True
 
 
@@ -278,7 +328,7 @@ class EventCreateDB(BaseModel):
     end_datetime: Optional[datetime] = None
     registration_end_datetime: Optional[datetime] = None
     registration_end_type: Optional[RegistrationEndType] = None
-    reminders: Optional[List[EventReminder]] = None
+    reminders: Optional[List[EventReminderCreate]] = None
     is_draft: bool = True
     is_archived: bool = False
 
@@ -300,8 +350,9 @@ class EventUpdateDB(BaseModel):
     end_datetime: Optional[datetime] = None
     registration_end_datetime: Optional[datetime] = None
     registration_end_type: Optional[RegistrationEndType] = None
-    reminders: Optional[List[EventReminder]] = None
+    reminders: Optional[List[EventReminderCreate]] = None
     is_draft: Optional[bool] = None
+    is_archived: Optional[bool] = None
 
 
 class EventSimpleResponse(BaseEvent):
@@ -311,21 +362,22 @@ class EventSimpleResponse(BaseEvent):
     event_type: Optional[EventType] = None
     places: Optional[List[EventPlacesBase]] = []
     online_links: Optional[List[str]]
+    reminders: Optional[List[EventReminderResponse]] = []
 
 
 class EventResponse(EventSimpleResponse):
-    specializations: List[SpecializationResponse]
+    specializations: List[SpecializationWithDirectionResponse]
     city: Optional[CityWithCountryResponse]
     timezone: Optional[TimezoneSimpleResponse]
     organizers: List[UserParticipantResponse]
     speakers: List[UserParticipantResponse]
     contact_persons: List[ContactPersonResponse]
     organisations: List[OrganisationShortResponse]
-    participants: List[UserEventResponse]
     creator: UserEventResponse
     is_draft: bool
     is_archived: Optional[bool] = None
     created_at: datetime
+    updated_at: datetime
 
 
 class EventWithCountersResponse(EventResponse):
@@ -334,6 +386,8 @@ class EventWithCountersResponse(EventResponse):
     browsing_now: Optional[int] = None
     views: Optional[int] = None
     is_viewed_by_current_user: Optional[bool] = None
+    is_favorite: Optional[bool] = None
+    is_attended: Optional[bool] = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -343,28 +397,44 @@ class EventWithCountersResponse(EventResponse):
         if isinstance(self, Event):
             return self
         data = self["Event"].__dict__
-        data["new_participants_count"] = self["new_participants_count"]
-        data["participants_count"] = self["participants_count"]
-        data["views"] = self["views"]
-        if "is_viewed_by_current_user" in self:
-            data["is_viewed_by_current_user"] = self[
-                "is_viewed_by_current_user"
-            ]
+        data["new_participants_count"] = self.get("new_participants_count")
+        data["participants_count"] = self.get("participants_count")
+        data["views"] = self.get("views")
+        if is_viewed := self.get("is_viewed_by_current_user"):
+            data["is_viewed_by_current_user"] = is_viewed
+        if "is_favorite" in self:
+            is_favorite = self.get("is_favorite")
+            data["is_favorite"] = (
+                is_favorite if is_favorite is not None else False
+            )
+        if "is_attended" in self:
+            is_attended = self.get("is_attended")
+            data["is_attended"] = (
+                is_attended if is_attended is not None else False
+            )
         return data
 
     @model_validator(mode="before")
     def add_context_data(self, values: ValidationInfo, **kwargs) -> Self:
         if values.context:
-            if "new_participants_count" in values.context:
-                self.new_participants_count = values.context[
-                    "new_participants_count"
-                ]
-            if "participants_count" in values.context:
-                self.participants_count = values.context["participants_count"]
-            if "views" in values.context:
-                self.views = values.context["views"]
-            if "browsing_now" in values.context:
-                self.browsing_now = values.context["browsing_now"]
+            if new_participants_count := values.context.get(
+                "participants_count"
+            ):
+                self.new_participants_count = new_participants_count
+            if participants_count := values.context.get("participants_count"):
+                self.participants_count = participants_count
+            if views := values.context.get("views"):
+                self.views = views
+            if browsing_now := values.context.get("browsing_now"):
+                self.browsing_now = browsing_now
+            is_favorite = values.context.get("is_favorite")
+            self.is_favorite = (
+                is_favorite if is_favorite is not None else False
+            )
+            is_attended = values.context.get("is_attended")
+            self.is_attended = (
+                is_attended if is_attended is not None else False
+            )
         return self
 
 
@@ -374,3 +444,29 @@ class EventTypesResponse(BaseModel):
 
 class EventLanguagesResponse(BaseModel):
     languages: List[EventLanguage]
+
+
+class EventCountResponse(BaseModel):
+    archived_events_count: int
+    draft_events_count: int
+    published_events_count: int
+
+
+class EventParticipantCreate(BaseModel):
+    user_id: int
+    event_id: int
+
+
+class EventParticipantResponse(BaseModel):
+    user: UserEventResponse
+    updated_by: Optional[UserEventResponse] = None
+    status: Optional[ProposalStatusResponse] = None
+    notes: str
+    updated_at: datetime
+    created_at: datetime
+
+    @model_validator(mode="before")
+    def schema_nested_parser(self, values: ValidationInfo) -> Self:
+        if isinstance(self, EventParticipants):
+            return self
+        return self["EventParticipants"].__dict__
