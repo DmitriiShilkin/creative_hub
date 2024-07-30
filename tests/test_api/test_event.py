@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, UTC
 from io import BytesIO
 from typing import Callable
 
@@ -64,7 +65,6 @@ class TestEvent:
             event_fixture.id == response_data["objects"][0]["id"]
         ), response_data
         assert response_data["objects"][0]["is_favorite"] is True
-        assert response_data["objects"][0]["is_attended"] is True
 
     async def test_read_event_author_by_wrong_uid(
         self,
@@ -126,7 +126,6 @@ class TestEvent:
             event_fixture.id == response_data["objects"][0]["id"]
         ), response_data
         assert response_data["objects"][0]["is_favorite"] is True
-        assert response_data["objects"][0]["is_attended"] is True
 
     async def test_get_single_event(
         self,
@@ -169,7 +168,6 @@ class TestEvent:
         assert response.status_code == 200
         response_data = response.json()
         assert response_data["is_favorite"] is True
-        assert response_data["is_attended"] is True
         assert response_data["title"] == event_fixture.title
         assert response_data["id"] == event_fixture.id
 
@@ -1758,3 +1756,117 @@ class TestEvent:
         assert (
             event_data["description"] == event_fixture.description
         ), response.text
+
+    async def test_publish(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture: User,
+        user_fixture_2: User,
+        event_fixture: Event,
+        event_fixture_2: Event,
+        event_fixture_3: Event,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+        user_2_auth_headers = await get_auth_headers(user_fixture_2)
+        endpoint = f"{ROOT_ENDPOINT}publish/{event_fixture.id}/"
+        endpoint_2 = f"{ROOT_ENDPOINT}publish/{event_fixture_2.id}/"
+        endpoint_3 = f"{ROOT_ENDPOINT}publish/{event_fixture_3.id}/"
+        endpoint_invalid = f"{ROOT_ENDPOINT}publish/{999}/"
+
+        # успешная публикация
+        response = await http_client.patch(
+            endpoint_3,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        endpoint_new = f"{ROOT_ENDPOINT}{event_fixture_3.id}/"
+        response = await http_client.get(
+            endpoint_new,
+            headers=user_auth_headers,
+        )
+        response_data = response.json()
+        assert response_data["is_archived"] is False
+        assert response_data["is_draft"] is False
+        assert (
+            datetime.now(tz=UTC).strftime("%Y-%m-%d")
+            in response_data["published_at"]
+        )
+
+        # неуспешная публикация, событие не найдено
+        response = await http_client.patch(
+            endpoint_invalid,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 404
+
+        # неуспешная публикация, уже опубликовано
+        response = await http_client.patch(
+            endpoint,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 409
+
+        # неуспешная публикация, черновик
+        response = await http_client.patch(
+            endpoint_2,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 409
+
+        # неуспешная публикация, пользователь не автор
+        response = await http_client.patch(
+            endpoint_3,
+            headers=user_2_auth_headers,
+        )
+        assert response.status_code == 403
+
+    async def test_unpublish(
+        self,
+        http_client: AsyncClient,
+        get_auth_headers: Callable,
+        user_fixture: User,
+        user_fixture_2: User,
+        event_fixture: Event,
+        event_fixture_3: Event,
+    ) -> None:
+        user_auth_headers = await get_auth_headers(user_fixture)
+        user_2_auth_headers = await get_auth_headers(user_fixture_2)
+        endpoint = f"{ROOT_ENDPOINT}unpublish/{event_fixture.id}/"
+        endpoint_3 = f"{ROOT_ENDPOINT}unpublish/{event_fixture_3.id}/"
+        endpoint_invalid = f"{ROOT_ENDPOINT}unpublish/{999}/"
+
+        # успешная архивация
+        response = await http_client.patch(
+            endpoint,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        endpoint_new = f"{ROOT_ENDPOINT}{event_fixture.id}/"
+        response = await http_client.get(
+            endpoint_new,
+            headers=user_auth_headers,
+        )
+        response_data = response.json()
+        assert response_data["is_archived"] is True
+
+        # неуспешная архивация, событие не найдено
+        response = await http_client.patch(
+            endpoint_invalid,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 404
+
+        # неуспешная архивация, уже в архиве
+        response = await http_client.patch(
+            endpoint_3,
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 409
+
+        # неуспешная архивация, пользователь не автор
+        response = await http_client.patch(
+            endpoint,
+            headers=user_2_auth_headers,
+        )
+        assert response.status_code == 403

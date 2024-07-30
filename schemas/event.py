@@ -378,6 +378,7 @@ class EventResponse(EventSimpleResponse):
     is_archived: Optional[bool] = None
     created_at: datetime
     updated_at: datetime
+    published_at: Optional[datetime] = None
 
 
 class EventWithCountersResponse(EventResponse):
@@ -387,7 +388,6 @@ class EventWithCountersResponse(EventResponse):
     views: Optional[int] = None
     is_viewed_by_current_user: Optional[bool] = None
     is_favorite: Optional[bool] = None
-    is_attended: Optional[bool] = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -407,11 +407,6 @@ class EventWithCountersResponse(EventResponse):
             data["is_favorite"] = (
                 is_favorite if is_favorite is not None else False
             )
-        if "is_attended" in self:
-            is_attended = self.get("is_attended")
-            data["is_attended"] = (
-                is_attended if is_attended is not None else False
-            )
         return data
 
     @model_validator(mode="before")
@@ -430,10 +425,6 @@ class EventWithCountersResponse(EventResponse):
             is_favorite = values.context.get("is_favorite")
             self.is_favorite = (
                 is_favorite if is_favorite is not None else False
-            )
-            is_attended = values.context.get("is_attended")
-            self.is_attended = (
-                is_attended if is_attended is not None else False
             )
         return self
 

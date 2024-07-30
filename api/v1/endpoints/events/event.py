@@ -1,3 +1,4 @@
+from datetime import datetime, UTC
 from typing import List, Optional
 from uuid import UUID
 
@@ -179,7 +180,6 @@ async def read_event(
             "views": found_event.views,
             "browsing_now": browsing_now,
             "is_favorite": found_event.is_favorite,
-            "is_attended": found_event.is_attended,
         },
     )
 
@@ -393,3 +393,67 @@ async def get_event_languages():
     return {
         "languages": [event_language.value for event_language in EventLanguage]
     }
+
+
+@router.patch(
+    "/publish/{event_id}/",
+    status_code=status.HTTP_200_OK,
+)
+async def publish_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    found_event = await crud_event.get_by_id(db, obj_id=event_id)
+    if not found_event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The event not found.",
+        )
+    if found_event.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event creator can publish.",
+        )
+    if found_event.is_draft:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot publish a draft event.",
+        )
+    if not found_event.is_archived:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The event is already published.",
+        )
+    found_event.is_archived = False
+    found_event.published_at = datetime.now(tz=UTC)
+    await db.commit()
+
+
+@router.patch(
+    "/unpublish/{event_id}/",
+    status_code=status.HTTP_200_OK,
+)
+async def unpublish_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    found_event = await crud_event.get_by_id(db, obj_id=event_id)
+    if not found_event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The event not found",
+        )
+    if found_event.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the event creator can unpublish.",
+        )
+    if found_event.is_archived:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The event is not published.",
+        )
+    found_event.is_archived = True
+    await db.commit()
