@@ -1,29 +1,71 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Union
+from datetime import datetime, timedelta, UTC
+from typing import Optional, Type, Union
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import delete, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload, load_only
+from sqlalchemy.orm import joinedload, load_only, selectinload
 
+from constants.crud_types import ModelType
 from crud.async_crud import BaseAsyncCRUD
+from crud.options import city_and_country, user_specialisation, specialisations
 from models import (
     City,
     Education,
     Event,
     Mentorship,
     Project,
-    Specialization,
     User,
     UserExperience,
-    UserSpecialization,
 )
-from schemas.user.user import UserCreateDB, UserUpdate
+from schemas.user.user import UserCreateDB, UserUpdateDB
 
 
-class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
+class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdateDB]):
+    def __init__(self, model: Type[ModelType]) -> None:
+        super().__init__(model)
+        self.full_options = (
+            joinedload(self.model.city).options(*city_and_country),
+            joinedload(self.model.timezone),
+            selectinload(self.model.authored_projects).options(
+                selectinload(Project.coauthors),
+                selectinload(Project.keywords),
+                joinedload(Project.image),
+                joinedload(Project.organisation),
+                selectinload(Project.specializations).options(
+                    *specialisations
+                ),
+            ),
+            joinedload(self.model.mentorship).options(
+                selectinload(Mentorship.specializations).options(
+                    *specialisations
+                ),
+                selectinload(Mentorship.translations),
+                selectinload(Mentorship.keywords),
+                selectinload(Mentorship.demands),
+            ),
+            selectinload(self.model.created_events).options(
+                joinedload(Event.city).joinedload(City.country),
+                selectinload(Event.specializations),
+                selectinload(Event.organizers),
+                selectinload(Event.speakers),
+                selectinload(Event.contact_persons),
+            ),
+            selectinload(self.model.links),
+            selectinload(self.model.education).options(
+                joinedload(Education.city).joinedload(City.country),
+                selectinload(Education.certificates),
+            ),
+            selectinload(self.model.experience).options(
+                joinedload(UserExperience.city).joinedload(City.country),
+            ),
+            joinedload(self.model.private_site),
+            joinedload(self.model.active_organisation),
+            user_specialisation,
+        )
+
     async def get_by_id(
         self, db: AsyncSession, *, user_id: int
     ) -> Optional[User]:
@@ -61,7 +103,7 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
         user = await self.get_by_id(db, user_id=user_id)
         if user:
             user.is_deleted = True
-            user.deleted_at = datetime.now(tz=timezone.utc)
+            user.deleted_at = datetime.now(tz=UTC)
             if commit:
                 await db.commit()
                 await db.refresh(user)
@@ -78,10 +120,26 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
             )
             .options(
                 joinedload(self.model.mentorship),
-                joinedload(self.model.contact_info),
                 joinedload(self.model.favorites),
                 joinedload(self.model.city).joinedload(City.country),
-                joinedload(self.model.profile_completeness),
+            )
+        )
+        result = await db.execute(statement)
+        return result.scalars().first()
+
+    async def get_by_username(
+        self, db: AsyncSession, *, username: str
+    ) -> Optional[User]:
+        statement = (
+            select(self.model)
+            .where(
+                self.model.username == username,
+                self.model.is_deleted.is_(False),
+            )
+            .options(
+                joinedload(self.model.mentorship),
+                joinedload(self.model.favorites),
+                joinedload(self.model.city).joinedload(City.country),
             )
         )
         result = await db.execute(statement)
@@ -98,7 +156,10 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
             )
             .options(
                 load_only(
-                    self.model.id, self.model.uid, self.model.last_visited_at
+                    self.model.id,
+                    self.model.uid,
+                    self.model.last_visited_at,
+                    self.model.main_language,
                 )
             )
         )
@@ -108,14 +169,15 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
     async def remove_after_30_days(
         self,
         db: AsyncSession,
-    ) -> None:
-        one_month_ago = datetime.now(tz=timezone.utc) - timedelta(days=30)
+    ) -> int:
+        one_month_ago = datetime.now(tz=UTC) - timedelta(days=30)
         statement = delete(self.model).where(
             self.model.is_deleted.is_(True),
             self.model.deleted_at <= one_month_ago,
         )
-        await db.execute(statement)
+        result = await db.execute(statement)
         await db.commit()
+        return result.rowcount
 
     async def get_by_uid_full(
         self, db: AsyncSession, *, uid: UUID
@@ -126,48 +188,21 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
                 self.model.uid == uid,
                 self.model.is_deleted.is_(False),
             )
-            .options(
-                joinedload(self.model.city).joinedload(City.country),
-                joinedload(self.model.timezone),
-                joinedload(self.model.authored_projects).options(
-                    joinedload(Project.coauthors),
-                    joinedload(Project.keywords),
-                    joinedload(Project.image),
-                ),
-                joinedload(self.model.mentorship).options(
-                    joinedload(Mentorship.specializations).joinedload(
-                        Specialization.direction
-                    ),
-                    joinedload(Mentorship.translations),
-                    joinedload(Mentorship.keywords),
-                    joinedload(Mentorship.demands),
-                ),
-                joinedload(self.model.created_events).options(
-                    joinedload(Event.city).joinedload(City.country),
-                    joinedload(Event.specializations),
-                    joinedload(Event.organizers),
-                    joinedload(Event.speakers),
-                    joinedload(Event.contact_persons),
-                ),
-                joinedload(self.model.links),
-                joinedload(self.model.education).options(
-                    joinedload(Education.city).joinedload(City.country),
-                    joinedload(Education.certificates),
-                ),
-                joinedload(self.model.experience).options(
-                    joinedload(UserExperience.city).joinedload(City.country),
-                ),
-                joinedload(self.model.social_networks),
-                joinedload(self.model.private_site),
-                joinedload(self.model.specialization).options(
-                    joinedload(UserSpecialization.keywords),
-                    joinedload(UserSpecialization.specializations).joinedload(
-                        Specialization.direction
-                    ),
-                ),
-                joinedload(self.model.contact_info),
-                joinedload(self.model.profile_completeness),
+            .options(*self.full_options)
+        )
+        result = await db.execute(statement)
+        return result.scalars().first()
+
+    async def get_by_username_full(
+        self, db: AsyncSession, *, username: str
+    ) -> Optional[User]:
+        statement = (
+            select(self.model)
+            .where(
+                self.model.username == username,
+                self.model.is_deleted.is_(False),
             )
+            .options(*self.full_options)
         )
         result = await db.execute(statement)
         return result.scalars().first()
@@ -177,7 +212,7 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
         db: AsyncSession,
         *,
         db_obj: User,
-        update_data: Union[UserUpdate, dict],
+        update_data: Union[UserUpdateDB, dict],
         commit: bool = True,
     ) -> User:
         if isinstance(update_data, BaseModel):
@@ -191,6 +226,7 @@ class CRUDUser(BaseAsyncCRUD[User, UserCreateDB, UserUpdate]):
             .options(
                 joinedload(self.model.city).joinedload(City.country),
                 joinedload(self.model.timezone),
+                joinedload(self.model.active_organisation),
             )
         )
         result = await db.execute(stmt)

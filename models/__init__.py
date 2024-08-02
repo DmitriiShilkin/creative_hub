@@ -8,7 +8,6 @@ from .frilance import (
     BaseAnswer,
     FileAnswer,
     Job,
-    JobFile,
     JobView,
     MultipleChoiceAnswer,
     NumberAnswer,
@@ -29,24 +28,27 @@ from .m2m import (
 )
 from .media_file import MediaFile
 from .organisation import Organisation, OrganisationOffice
-from .project import Project
+from .project.project import Project
+from .project.project_views import ProjectView
 from .text_document import TextDocument
+from .timezone import Timezone
 from .user import (
     Direction,
     Education,
-    EducationCertificateFile,
     Link,
     Mentorship,
     PrivateSite,
-    ProfileCompleteness,
     SocialNetwork,
     Specialization,
     User,
-    UserContact,
     UserExperience,
     UserSpecialization,
     VerificationCode,
 )
+from .views import EventView
+from .status import Status
+from .event_participants import EventParticipants
+
 
 __all__ = [
     "City",
@@ -60,6 +62,7 @@ __all__ = [
     "Specialization",
     "VerificationCode",
     "Project",
+    "ProjectView",
     "ProjectsCoauthors",
     "Keyword",
     "ProjectsKeywords",
@@ -72,13 +75,10 @@ __all__ = [
     "Job",
     "Proposal",
     "ProposalStatus",
-    "JobFile",
     "PrivateSite",
-    "ProfileCompleteness",
     "ProposalTableConfig",
     "ProposalTableCustomField",
     "ProposalChoice",
-    "EducationCertificateFile",
     "Organisation",
     "OrganisationOffice",
     "MediaFile",
@@ -88,11 +88,14 @@ __all__ = [
     "SingleChoiceAnswer",
     "MultipleChoiceAnswer",
     "FileAnswer",
+    "Timezone",
     "JobView",
+    "EventView",
     "Favorite",
-    "UserContact",
     "TextDocument",
     "CalendarEvent",
     "CalendarEventComment",
     "CalendarEventUsers",
+    "Status",
+    "EventParticipants",
 ]

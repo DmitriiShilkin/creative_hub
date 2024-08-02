@@ -16,9 +16,15 @@ from api.admin.views.frilance.proposal import (
     ProposalAdmin,
     ProposalStatusAdmin,
 )
+from api.admin.views.frilance.proposal_table_config import (
+    ProposalTableConfigAdmin,
+)
 from api.admin.views.keyword import KeywordAdmin
 from api.admin.views.media_file import MediaFileAdmin
-from api.admin.views.organisation.organisation import OrganisationAdmin
+from api.admin.views.organisation.organisation import (
+    OrganisationAdmin,
+    OrganisationTranslationAdmin,
+)
 from api.admin.views.organisation.organisation_office import (
     OrganisationOfficeAdmin,
 )
@@ -26,8 +32,10 @@ from api.admin.views.project import (
     ProjectAdmin,
     ProjectCoauthorsAdmin,
     ProjectsKeywordsAdmin,
+    ProjectViewAdmin,
 )
 from api.admin.views.text_document import TextDocumentAdmin
+from api.admin.views.timezone import TimezoneAdmin
 from api.admin.views.user.contact_person import ContactPersonAdmin
 from api.admin.views.user.direction import (
     DirectionAdmin,
@@ -60,7 +68,7 @@ class DelimiterAdmin(BaseView):
     name = ""
 
     @expose("/", methods=["GET"])
-    async def test_page(self, request: Request):
+    async def test_page(self, request: Request) -> RedirectResponse:
         return RedirectResponse("/ch/admin/")
 
 
@@ -87,6 +95,7 @@ def load_admin_site(admin: Admin) -> None:
     admin.add_view(CityTranslationAdmin)
     admin.add_view(CountryAdmin)
     admin.add_view(CountryTranslationAdmin)
+    admin.add_view(TimezoneAdmin)
     admin.add_view(SpecializationAdmin)
     admin.add_view(SpecializationTranslationAdmin)
     admin.add_view(DirectionAdmin)
@@ -99,10 +108,12 @@ def load_admin_site(admin: Admin) -> None:
     admin.add_view(ProposalStatusAdmin)
     admin.add_view(ProposalAdmin)
     admin.add_view(ProposalTableCustomFieldAdmin)
+    admin.add_view(ProposalTableConfigAdmin)
     admin.add_base_view(DelimiterAdmin3)
 
     admin.add_view(KeywordAdmin)
     admin.add_view(ProjectAdmin)
+    admin.add_view(ProjectViewAdmin)
     admin.add_view(ProjectCoauthorsAdmin)
     admin.add_view(ProjectsKeywordsAdmin)
     admin.add_view(TextDocumentAdmin)
@@ -113,6 +124,7 @@ def load_admin_site(admin: Admin) -> None:
     admin.add_view(EventAdmin)
     admin.add_view(ContactPersonAdmin)
     admin.add_view(OrganisationAdmin)
+    admin.add_view(OrganisationTranslationAdmin)
     admin.add_view(OrganisationOfficeAdmin)
     admin.add_view(MediaFileAdmin)
 

@@ -20,13 +20,18 @@ from utilities.validators.calendar_event import check_participants
 async def calendar_event_fixture(
     async_session: AsyncSession, user_fixture: User
 ) -> CalendarEvent:
+    now = datetime.now(utc)
+    if now.month == (now + timedelta(days=1, hours=2)).month:
+        start_time = now + timedelta(days=1, hours=1)
+    else:
+        start_time = now - timedelta(days=1) + timedelta(hours=1)
     schema = CalendarEventCreateDB(
         title="Calendar event title",
         event_type=CalendarEventType.NO_CATEGORY,
         priority=CalendarEventPriority.WITHOUT_PRIORITY,
         repeatability=CalendarEventRepeatability.NO_REPEATS,
-        start_time=datetime.now(utc) + timedelta(days=1, hours=1),
-        end_time=datetime.now(utc) + timedelta(days=1, hours=2),
+        start_time=start_time,
+        end_time=start_time + timedelta(hours=1),
         description="Calendar event description",
         organizer_id=user_fixture.id,
     )

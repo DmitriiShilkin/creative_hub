@@ -17,6 +17,8 @@
 11. Дополнена фикстура Event и добавлены тесты event API (is_attended).
 12. Добавлены тесты event API (publish/unpublish).
 13. Добавлен тест event API (read_attended_events).
+14. Изменены фикстура calendar_event, удалена фикстура user_contact_info,
+изменены тесты API test_user_info, test_users.
 
 ### Разработка:
 1. Исправлен crud для удаления в endpoint Delete Proposal.
@@ -82,6 +84,11 @@ is_ready_to_move, is_ready_for_remote_work. Добавлены атрибуты 
 написана миграция, дополнена схема.
 32. Добавлен роут для получения всех посещенных событий - дополнены event_crud_with_counters
 и сервис event_‎read.
+33. В модели User связь с моделью ContactInfo заменена на поле JSON -
+из админки удалена модель ContactInfo, написана миграция,
+из круд completeness и user удалена подгрузка связанной модели,
+изменена модель User, изменены схемы organisation, user_full, user_info,
+изменены сервисы completeness, user_info и user_service.
 
 #### Используемые инструменты:
 1. Python v3.11;
